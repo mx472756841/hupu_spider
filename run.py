@@ -67,13 +67,13 @@ def run_get_article_list(q):
                     connection.close()
 
                 q.put(comment_data)
-            if q.size() > 1500:
+            if q.qsize() > 1500:
                 time.sleep(60 * 10)
     q.put(None)
 
 
 def run():
-    q = Queue()
+    q = Queue(2000)
 
     p = Process(target=run_get_article_list, args=(q,), name="get_article_list")
     p.start()
