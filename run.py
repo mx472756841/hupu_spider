@@ -1,3 +1,4 @@
+import time
 from multiprocessing import Process, Queue
 
 import pymysql
@@ -66,6 +67,8 @@ def run_get_article_list(q):
                     connection.close()
 
                 q.put(comment_data)
+            if q.size() > 1500:
+                time.sleep(60 * 10)
     q.put(None)
 
 
