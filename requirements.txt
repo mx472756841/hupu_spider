@@ -1,0 +1,6 @@
+requests==2.21
+jieba
+pyquery
+fake_useragent
+retrying
+pymysql
