@@ -1,13 +1,34 @@
-from multiprocessing import Process, SimpleQueue, cpu_count
+from multiprocessing import Process, Queue
+
+import pymysql
 
 from hupu.community.base import get_article_list
 from pools import spider
 
 
 def run_get_article_list(q):
-    for idx in range(1, 2):
+    for idx in range(1, 600):
         articles = get_article_list("vote", idx)
-        print(articles)
+
+        if articles:
+            # Connect to the database
+            connection = pymysql.connect(host='115.159.119.204',
+                                         user='root',
+                                         password='BnakQkfF2sf1',
+                                         db='hupu',
+                                         port=10020,
+                                         charset='utf8mb4',
+                                         cursorclass=pymysql.cursors.DictCursor)
+            try:
+                with connection.cursor() as cursor:
+                    sql = """
+                        insert into datas(idx, `length`) values(%s, %s)
+                    """
+                    cursor.execute(sql, [idx, len(articles)])
+                connection.commit()
+            finally:
+                connection.close()
+
         for row in articles:
             # 爬取文章信息
             article_data = {
@@ -26,18 +47,35 @@ def run_get_article_list(q):
                         "page": i
                     }
                 }
+                # Connect to the database
+                connection = pymysql.connect(host='115.159.119.204',
+                                             user='root',
+                                             password='BnakQkfF2sf1',
+                                             db='hupu',
+                                             port=10020,
+                                             charset='utf8mb4',
+                                             cursorclass=pymysql.cursors.DictCursor)
+                try:
+                    with connection.cursor() as cursor:
+                        sql = """
+                           insert into datas(article_id, comments) values(%s, %s)
+                       """
+                        cursor.execute(sql, [row['article_id'], i])
+                    connection.commit()
+                finally:
+                    connection.close()
+
                 q.put(comment_data)
     q.put(None)
 
 
 def run():
-    q = SimpleQueue()
+    q = Queue()
 
     p = Process(target=run_get_article_list, args=(q,), name="get_article_list")
     p.start()
 
-
-    for i in range(0, cpu_count() - 3):
+    for i in range(0, 2):
         p = Process(target=spider, args=(q,), name=f"spider-{i}")
         p.start()
 

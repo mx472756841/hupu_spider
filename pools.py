@@ -131,6 +131,8 @@ def spider(queue):
                 break
         except:
             traceback.print_exc()
+    # 保证每个进程都停掉
+    queue.put(None)
 
 
 if __name__ == "__main__":
