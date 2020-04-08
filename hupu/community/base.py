@@ -1,3 +1,5 @@
+from http.cookiejar import CookieJar
+
 from pyquery.pyquery import PyQuery as pquery
 
 from hupu.structures import *
@@ -72,14 +74,19 @@ def get_commtents(article_id, page):
         raise RuntimeError(f"get article {article_id} page {page} comment error!!!")
 
 
-def get_article_list(plate, page):
+def get_article_list(plate, page, cookies=None):
     """
     获取文章列表，返回文章id列表，和每个文章的评论页数
     :param page:
     :return:
     """
     real_fetch_url = plate_url % (plate, page)
-    result = fetch(real_fetch_url)
+    if not isinstance(cookies, (dict, CookieJar)):
+        cookies = {}
+    # 添加cookies的几种方式
+    # 1. 直接放在headers中，cookie键对应的值就是浏览器复制的值
+    # 2. 在request时，增加key cookies，对应的是一个字典或者CookieJar类型的对象，从数据库取出需要的即可
+    result = fetch(real_fetch_url, cookies=cookies)
     if result:
         return_data = []
         article_list = pquery('.show-list', result)

@@ -1,4 +1,3 @@
-import time
 from multiprocessing import Process, Queue
 
 import pymysql
@@ -8,8 +7,12 @@ from pools import spider
 
 
 def run_get_article_list(q):
+    # 虎扑登录后，产生的cookie，对于虎扑而言u这个cookie是实际使用的key
+    cookies = {
+        "u": "28543539|6JCn55Gf5pyX|9b49|26d02c47a8424dd9fb9d72416a700969|a8424dd9fb9d7241|aHVwdV8wZWVlNTQ1YjA0NGY2OTlm"
+    }
     for idx in range(1, 600):
-        articles = get_article_list("vote", idx)
+        articles = get_article_list("vote", idx, cookies)
 
         if articles:
             # Connect to the database
@@ -67,8 +70,6 @@ def run_get_article_list(q):
                     connection.close()
 
                 q.put(comment_data)
-            if q.qsize() > 1500:
-                time.sleep(60 * 10)
     q.put(None)
 
 
@@ -83,5 +84,19 @@ def run():
         p.start()
 
 
+def test_get_article_list():
+    for idx in range(11, 12):
+        # 虎扑登录后，产生的cookie，对于虎扑而言u这个cookie是实际使用的key
+        cookies = {
+            "u": "28543539|6JCn55Gf5pyX|9b49|26d02c47a8424dd9fb9d72416a700969|a8424dd9fb9d7241|aHVwdV8wZWVlNTQ1YjA0NGY2OTlm"
+        }
+        articles = get_article_list("vote", idx, cookies)
+        print(f"spider {idx} articles {len(articles)}...")
+        for row in articles:
+            # 爬取文章信息
+            for i in range(1, row['comment_pages'] + 1):
+                print(f"spider articles {row['article_id']} page {i} comment ...")
+
+
 if __name__ == "__main__":
-    run()
+    test_get_article_list()
