@@ -1,5 +1,5 @@
 import traceback
-
+import threading
 import jieba
 import pymysql.cursors
 
@@ -7,34 +7,25 @@ from hupu.community.base import get_commtents, get_article
 
 
 def download_comments(article_id, page):
-    for comment in get_commtents(article_id, page):
-        # 插入数据库
-        # Connect to the database
-        connection = pymysql.connect(host='115.159.119.204',
-                                     user='root',
-                                     password='BnakQkfF2sf1',
-                                     db='hupu',
-                                     port=10020,
-                                     charset='utf8mb4',
-                                     cursorclass=pymysql.cursors.DictCursor)
+    comments = get_commtents(article_id, page)
+    # 插入数据库
+    # Connect to the database
+    connection = pymysql.connect(host='115.159.119.204',
+                                 user='root',
+                                 password='BnakQkfF2sf1',
+                                 db='hupu',
+                                 port=10020,
+                                 charset='utf8mb4',
+                                 cursorclass=pymysql.cursors.DictCursor)
 
-        try:
-            with connection.cursor() as cursor:
+    try:
+        with connection.cursor() as cursor:
+            for comment in comments:
                 # Create a new record
-                sql = "select id from hupu_comment where id = %s"
-                cursor.execute(sql, comment.id)
+                sql = "select id from hupu_comment where id = %s and article_id = %s"
+                cursor.execute(sql, [comment.id, article_id])
                 fetch_data = cursor.fetchone()
                 if not fetch_data:
-                    # 本地尚未入库，则插入数据库
-                    sql = """
-                        insert into hupu_comment(id, article_id, publish_date, author, author_id, comment, reply_comment)
-                        values(%s, %s, %s, %s, %s, %s, %s)
-                    """
-                    cursor.execute(sql, [
-                        comment.id, article_id, comment.publish_date, comment.author,
-                        comment.author_id, comment.comment, comment.reply_comment
-                    ])
-
                     # 结巴分词解析content的关键词
                     if comment.reply_comment and "隐藏" not in comment.reply_comment:
                         kwords = jieba.cut(",".join([comment.reply_comment, comment.comment]))
@@ -43,17 +34,23 @@ def download_comments(article_id, page):
 
                     # 排除纯数字，纯字符
                     finally_kwords = filter(lambda x: not x.isdigit() and len(x) > 1, kwords)
-                    for kword in finally_kwords:
-                        sql = """
-                            insert into hupu_keywards(keyword) value(%s)
-                        """
-                        cursor.execute(sql, kword)
+                    finally_kwords_str = " ".join(finally_kwords)
 
-            # connection is not autocommit by default. So you must commit to save
-            # your changes.
-            connection.commit()
-        finally:
-            connection.close()
+                    # 本地尚未入库，则插入数据库
+                    sql = """
+                        insert into hupu_comment(id, article_id, publish_date, author, author_id, comment, reply_comment, keywards)
+                        values(%s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    cursor.execute(sql, [
+                        comment.id, article_id, comment.publish_date, comment.author,
+                        comment.author_id, comment.comment, comment.reply_comment, finally_kwords_str
+                    ])
+
+        # connection is not autocommit by default. So you must commit to save
+        # your changes.
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def download_article(article_id):
@@ -76,29 +73,26 @@ def download_article(article_id):
                 cursor.execute(sql, article_id)
                 fetch_data = cursor.fetchone()
                 if not fetch_data:
-                    # 本地尚未入库，则插入数据库
-                    sql = """
-                        insert into hupu_article(id, title, publish_date, author, author_id, source, content)
-                        values(%s, %s, %s, %s, %s, %s, %s)
-                    """
-                    cursor.execute(sql, [
-                        article.id, article.title, article.publish_date, article.author,
-                        article.author_id, article.source, article.content
-                    ])
 
                     # 结巴分词解析content的关键词
                     if article.title in article.content:
                         kwords = jieba.cut(article.content)
                     else:
-                        kwords = jieba.cut(",".join([article.title, article.content]))
+                        kwords = jieba.cut(" ".join([article.title, article.content]))
 
                     # 排除纯数字，纯字符
                     finally_kwords = filter(lambda x: not x.isdigit() and len(x) > 1, kwords)
-                    for kword in finally_kwords:
-                        sql = """
-                            insert into hupu_keywards(keyword) value(%s)
-                        """
-                        cursor.execute(sql, kword)
+                    finally_kwords_str = " ".join(finally_kwords)
+
+                    # 本地尚未入库，则插入数据库
+                    sql = """
+                        insert into hupu_article(id, title, publish_date, author, author_id, source, content, keywards)
+                        values(%s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    cursor.execute(sql, [
+                        article.id, article.title, article.publish_date, article.author,
+                        article.author_id, article.source, article.content, finally_kwords_str
+                    ])
 
             # connection is not autocommit by default. So you must commit to save
             # your changes.
@@ -122,12 +116,14 @@ def spider(queue):
                 data = spider_info['data']
                 if dtype == 'article':
                     download_article(data['article_id'])
+                    print(f"{threading.get_ident()} - 文章{data['article_id']}信息入库成功...")
                 elif dtype == 'comment':
                     download_comments(data['article_id'], data['page'])
+                    print(f"{threading.get_ident()} - 文章{data['article_id']} 第{data['page']}页信息入库成功...")
                 else:
-                    print(f"不支持的类型{dtype}")
+                    print(f"{threading.get_ident()} - 不支持的类型{dtype}")
             else:
-                print("任务结束")
+                print(f"{threading.get_ident()} -任务结束")
                 break
         except:
             traceback.print_exc()

@@ -1,6 +1,6 @@
+import time
+import threading
 from multiprocessing import Process, Queue
-
-import pymysql
 
 from hupu.community.base import get_article_list
 from pools import spider
@@ -11,28 +11,9 @@ def run_get_article_list(q):
     cookies = {
         "u": "28543539|6JCn55Gf5pyX|9b49|26d02c47a8424dd9fb9d72416a700969|a8424dd9fb9d7241|aHVwdV8wZWVlNTQ1YjA0NGY2OTlm"
     }
-    for idx in range(1, 600):
+    for idx in range(2000, 0, -1):
         articles = get_article_list("vote", idx, cookies)
-
-        if articles:
-            # Connect to the database
-            connection = pymysql.connect(host='115.159.119.204',
-                                         user='root',
-                                         password='BnakQkfF2sf1',
-                                         db='hupu',
-                                         port=10020,
-                                         charset='utf8mb4',
-                                         cursorclass=pymysql.cursors.DictCursor)
-            try:
-                with connection.cursor() as cursor:
-                    sql = """
-                        insert into datas(idx, `length`) values(%s, %s)
-                    """
-                    cursor.execute(sql, [idx, len(articles)])
-                connection.commit()
-            finally:
-                connection.close()
-
+        print(f"{threading.get_ident()} - 第{idx}页，共抓取{len(articles)}条...")
         for row in articles:
             # 爬取文章信息
             article_data = {
@@ -51,26 +32,13 @@ def run_get_article_list(q):
                         "page": i
                     }
                 }
-                # Connect to the database
-                connection = pymysql.connect(host='115.159.119.204',
-                                             user='root',
-                                             password='BnakQkfF2sf1',
-                                             db='hupu',
-                                             port=10020,
-                                             charset='utf8mb4',
-                                             cursorclass=pymysql.cursors.DictCursor)
-                try:
-                    with connection.cursor() as cursor:
-                        sql = """
-                           insert into datas(article_id, comments) values(%s, %s)
-                       """
-                        cursor.execute(sql, [row['article_id'], i])
-                    connection.commit()
-                finally:
-                    connection.close()
-
                 q.put(comment_data)
+                print(f"{threading.get_ident()} - 文章{row['article_id']}抓取{row['comment_pages'] + 1}页评论...")
+            if q.qsize() > 1500:
+                print(f"{threading.get_ident()}  - 队列长度为{q.qsize()}， 暂停10分钟...")
+                time.sleep(600)
     q.put(None)
+    print("2000页已经加载完成")
 
 
 def run():
@@ -99,4 +67,4 @@ def test_get_article_list():
 
 
 if __name__ == "__main__":
-    test_get_article_list()
+    run()
