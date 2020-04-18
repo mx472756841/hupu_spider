@@ -48,8 +48,5 @@ class Article(Base):
         self.author_id = kwargs.get("author_id")
         self.source = kwargs.get("source")
         self.content = kwargs.get("content")
-        if self.title not in self.content:
-            content = f"{self.title} {self.content}"
-        else:
-            content = self.content
-        self.tags = self.get_tags(content, 20)
+        self.images = kwargs.get("images")
+        self.videos = kwargs.get("videos")

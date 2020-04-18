@@ -1,9 +1,12 @@
+import re
 from http.cookiejar import CookieJar
 
 from pyquery.pyquery import PyQuery as pquery
 
 from hupu.structures import *
 from hupu.utils.fetch import fetch
+
+PAGE_COUNT = re.compile("pageCount:(?P<page_count>\d+)", re.S)
 
 
 def get_article(article_id):
@@ -24,7 +27,30 @@ def get_article(article_id):
         publish_date = user_node.find("span.stime").text()
         content_node = article_node.find('table.case')
         title = content_node.find(".subhead").children("span").eq(0).text()
-        content = content_node.find(".quote-content").children("p").text()
+        # 内容中图片
+        image_nodes = content_node.find("img")
+        image_urls = []
+        for image in image_nodes.items():
+            image_urls.append(image.attr("src"))
+
+        # 内容中视频
+        video_nodes = content_node.find("video")
+        video_urls = []
+        for video in video_nodes.items():
+            video_urls.append(video.attr("src"))
+
+        # 手机上发布获取到内容的方式 最后标签是small
+        is_mobile = content_node.find(".quote-content").children("small:last")
+        if is_mobile and "发自虎扑" in is_mobile.text():
+            content = content_node.find(".quote-content").children("p").text()
+        else:
+            # 电脑上发布回去到内容的方式
+            content = content_node.find(".quote-content").children("div[data-type='normal']").text()
+            # 如果上述方式无法获得，则将.quote-content中 f666样式删除，取所有节点的text
+            if not content:
+                content_node.find(".quote-content").remove(".f666")
+                content = content_node.find(".quote-content").text()
+
         return Article(
             id=article_id,
             title=title,
@@ -32,7 +58,10 @@ def get_article(article_id):
             author=author,
             content=content,
             source=real_article_url,
-            publish_date=publish_date) if title else None
+            publish_date=publish_date,
+            images=image_urls,
+            videos=video_urls
+        ) if title else None
     else:
         raise RuntimeError(f"get article {article_id} error!!!")
 
@@ -47,8 +76,16 @@ def get_commtents(article_id, page):
     comment_url = f"{real_bbs_url}/{article_id}-{page}.html"
     result = fetch(comment_url)
     if result:
+        return_data = {
+            "total_page": 1,
+            "current_comments": []
+        }
         root = pquery(result)
         comments = root.find('div.floor:not([id="tpc"])')
+        page_count = re.search(PAGE_COUNT, result.decode("utf-8"))
+        if page_count:
+            return_data['total_page'] = int(page_count.group("page_count"))
+
         return_comments = []
         for comment in comments.items():
             comment_id = comment.attr("id")
@@ -69,7 +106,9 @@ def get_commtents(article_id, page):
                                                comment=comment_str,
                                                publish_date=publish_date,
                                                reply_comment=reply_comment))
-        return return_comments
+        return_data["current_comments"] = return_comments
+
+        return return_data
     else:
         raise RuntimeError(f"get article {article_id} page {page} comment error!!!")
 
@@ -112,8 +151,17 @@ def get_article_list(plate, page, cookies=None):
 
 
 if __name__ == "__main__":
-    # article = get_article(33458078)
+    # article = get_article(34576735)
+    # print(article.content)
+    # print(article.images)
+    # print(article.videos)
+    # article = get_article(34577737)
+    # print(article.content)
+    # print(article.images)
+    # print(article.videos)
     # print("content = {}".format("Paddle Mode: " + '/'.join(list(jieba.cut(article.content)))))
     # for row in get_commtents(33458078, 1):
     #     print("comment = {}".format("Paddle Mode: " + '/'.join(list(jieba.cut(row.comment)))))
-    get_commtents("33458078", 1)
+    # get_commtents("33458078", 1)
+    # get_commtents("34563541", 1)
+    print(get_commtents("34593801", 1))

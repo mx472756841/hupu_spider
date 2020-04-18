@@ -4,3 +4,5 @@ pyquery
 fake_useragent
 retrying
 pymysql
+redis
+celery
