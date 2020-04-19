@@ -1,5 +1,6 @@
 import datetime
 import json
+import re
 
 import jieba.analyse
 
@@ -8,6 +9,9 @@ from hupu.community.base import get_article, get_commtents, get_article_list
 from settings import logger, ARTICLE_DOWNLOAD_COMMENT_PAGE, LAST_DOWNLOAD_ARTICLE_ID_KEY, HUPU_DOWNLOAD_COOKIES_KEY
 from tools.db import get_conn, RedisClient
 from tools.utils import get_player, get_month_period, get_week_period, recursive_unicode
+
+# 内容中有http连接及Twitter关键字时影响分词，此处做处理
+P_CONTENT = [re.compile("[a-zA-z]+://[^\s]*"), re.compile("twitter", re.I)]
 
 
 @app.task
@@ -83,10 +87,19 @@ def download_article(article_id, times):
         if article:
             # 文件下载成功
             # 结巴分词解析content的关键词
+            # 文本中有链接时，分词时会将部分关键词分出来，因此分词时要将文章中链接删除
+            content = article.content
+            for p in P_CONTENT:
+                content = re.sub(p, "", content)
+
+            title = article.title
+            for p in P_CONTENT:
+                title = re.sub(p, "", title)
+
             if article.title in article.content:
-                kws = jieba.analyse.extract_tags(article.content, topK=10)
+                kws = jieba.analyse.extract_tags(content, topK=10)
             else:
-                kws = jieba.analyse.extract_tags(" ".join([article.title, article.content]), topK=10)
+                kws = jieba.analyse.extract_tags(" ".join([title, content]), topK=10)
 
             with get_conn() as cursor:
                 # 获取关键字对应人物
@@ -172,11 +185,22 @@ def download_comment(article_id, times):
                 if db_info:
                     # 已插入数据库则跳过
                     continue
+
                 # 结巴分词解析content的关键词
+                # 文本中有链接时，分词时会将部分关键词分出来，因此分词时要将文章中链接删除
+                reply_comment = comment.reply_comment
+                if reply_comment:
+                    for p in P_CONTENT:
+                        reply_comment = re.sub(p, "", comment.reply_comment)
+
+                comment = comment.comment
+                for p in P_CONTENT:
+                    comment = re.sub(p, "", comment)
+
                 if comment.reply_comment and "隐藏" not in comment.reply_comment:
-                    kws = jieba.analyse.extract_tags(",".join([comment.reply_comment, comment.comment]), topK=10)
+                    kws = jieba.analyse.extract_tags(",".join([reply_comment, comment]), topK=10)
                 else:
-                    kws = jieba.analyse.extract_tags(comment.comment, topK=10)
+                    kws = jieba.analyse.extract_tags(comment, topK=10)
                 # 获取关键字对应人物
                 persons = []
                 for kw in kws:
