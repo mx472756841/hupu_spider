@@ -62,6 +62,9 @@ def get_article(article_id):
             images=image_urls,
             videos=video_urls
         ) if title else None
+    elif not result:
+        # 文章已被删除
+        return None
     else:
         raise RuntimeError(f"get article {article_id} error!!!")
 
@@ -109,6 +112,9 @@ def get_commtents(article_id, page):
         return_data["current_comments"] = return_comments
 
         return return_data
+    elif not result:
+        # 文章已被删除
+        return None
     else:
         raise RuntimeError(f"get article {article_id} page {page} comment error!!!")
 
@@ -164,4 +170,8 @@ if __name__ == "__main__":
     #     print("comment = {}".format("Paddle Mode: " + '/'.join(list(jieba.cut(row.comment)))))
     # get_commtents("33458078", 1)
     # get_commtents("34563541", 1)
-    print(get_commtents("34593801", 1))
+    # print(get_commtents("34593801", 1))
+
+    url = "https://bbs.hupu.com/33600265.html"
+    result = fetch(url)
+    print(result)

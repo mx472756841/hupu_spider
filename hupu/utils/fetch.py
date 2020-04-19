@@ -36,7 +36,9 @@ def fetch(url, **kwargs):
         kwargs.update({'verify': False})
         kwargs.update({'timeout': fetch_timeout})
         response = requests.get(url, **kwargs)
-        if response.status_code != 200:
+        if response.status_code == 404:
+            return ""
+        elif response.status_code != 200:
             raise requests.ConnectionError('Expected status code 200, but got {}'.format(response.status_code))
         return response.content
 

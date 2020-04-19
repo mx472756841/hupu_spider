@@ -138,7 +138,6 @@ def download_article(article_id, times):
                         VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
                     """
                     cursor.execute(sql, [month_period, person])
-
     except:
         logger.exception(f"download shh article {article_id} error, fail times {times + 1}")
         if times < 3:
@@ -170,98 +169,99 @@ def download_comment(article_id, times):
             first_datetime = str(download_redis_info.get("first_datetime"))
 
         comments = get_commtents(article_id, page)
-        # 当前文章的总评论页数
-        total_page = comments['total_page']
-        # 当前页的文章评论信息
-        current_comments = comments['current_comments']
-        with get_conn() as cursor:
-            if page == 1 and current_comments:
-                first_datetime = current_comments[0].publish_date
+        if comments:
+            # 当前文章的总评论页数
+            total_page = comments['total_page']
+            # 当前页的文章评论信息
+            current_comments = comments['current_comments']
+            with get_conn() as cursor:
+                if page == 1 and current_comments:
+                    first_datetime = current_comments[0].publish_date
 
-            for comment in current_comments:
-                sql = "select id from hupu_comment where article_id = %s and comment_id = %s"
-                cursor.execute(sql, [article_id, comment.id])
-                db_info = cursor.fetchone()
-                if db_info:
-                    # 已插入数据库则跳过
-                    continue
+                for comment in current_comments:
+                    sql = "select id from hupu_comment where article_id = %s and comment_id = %s"
+                    cursor.execute(sql, [article_id, comment.id])
+                    db_info = cursor.fetchone()
+                    if db_info:
+                        # 已插入数据库则跳过
+                        continue
 
-                # 结巴分词解析content的关键词
-                # 文本中有链接时，分词时会将部分关键词分出来，因此分词时要将文章中链接删除
-                reply_comment = comment.reply_comment
-                if reply_comment:
+                    # 结巴分词解析content的关键词
+                    # 文本中有链接时，分词时会将部分关键词分出来，因此分词时要将文章中链接删除
+                    reply_comment = comment.reply_comment
+                    if reply_comment:
+                        for p in P_CONTENT:
+                            reply_comment = re.sub(p, "", comment.reply_comment)
+
+                    comment_str = comment.comment
                     for p in P_CONTENT:
-                        reply_comment = re.sub(p, "", comment.reply_comment)
+                        comment_str = re.sub(p, "", comment_str)
 
-                comment_str = comment.comment
-                for p in P_CONTENT:
-                    comment_str = re.sub(p, "", comment_str)
+                    if comment.reply_comment and "隐藏" not in comment.reply_comment:
+                        kws = jieba.analyse.extract_tags(",".join([reply_comment, comment_str]), topK=10)
+                    else:
+                        kws = jieba.analyse.extract_tags(comment_str, topK=10)
+                    # 获取关键字对应人物
+                    persons = []
+                    for kw in kws:
+                        persons.extend(get_player(kw))
+                    if persons:
+                        persons = list(set(persons))
 
-                if comment.reply_comment and "隐藏" not in comment.reply_comment:
-                    kws = jieba.analyse.extract_tags(",".join([reply_comment, comment_str]), topK=10)
-                else:
-                    kws = jieba.analyse.extract_tags(comment_str, topK=10)
-                # 获取关键字对应人物
-                persons = []
-                for kw in kws:
-                    persons.extend(get_player(kw))
-                if persons:
-                    persons = list(set(persons))
+                    # 根据人物插入周榜数据
+                    week_period = get_week_period(comment.publish_date)
+                    # 根据人物插入月榜数据
+                    month_period = get_month_period(comment.publish_date)
 
-                # 根据人物插入周榜数据
-                week_period = get_week_period(comment.publish_date)
-                # 根据人物插入月榜数据
-                month_period = get_month_period(comment.publish_date)
-
-                # 插入评论表
-                sql = """
-                    insert into hupu_comment(article_id, comment_id, publish_date, author, author_id, comment, reply_comment, kws, persons)
-                    value(%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
-                cursor.execute(sql, [article_id, comment.id, comment.publish_date, comment.author, comment.author_id,
-                                     comment.comment, comment.reply_comment, json.dumps(kws), json.dumps(persons)])
-
-                for person in persons:
-                    # 插入周榜信息
+                    # 插入评论表
                     sql = """
-                        INSERT INTO hupu_week_list(week_info, person_id, comment_cnt)
-                        VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                        insert into hupu_comment(article_id, comment_id, publish_date, author, author_id, comment, reply_comment, kws, persons)
+                        value(%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
-                    cursor.execute(sql, [week_period, person])
+                    cursor.execute(sql, [article_id, comment.id, comment.publish_date, comment.author, comment.author_id,
+                                         comment.comment, comment.reply_comment, json.dumps(kws), json.dumps(persons)])
 
-                    # 插入月榜信息
-                    sql = """
-                        INSERT INTO hupu_month_list(month_info, person_id, comment_cnt)
-                        VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
-                    """
-                    cursor.execute(sql, [month_period, person])
+                    for person in persons:
+                        # 插入周榜信息
+                        sql = """
+                            INSERT INTO hupu_week_list(week_info, person_id, comment_cnt)
+                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                        """
+                        cursor.execute(sql, [week_period, person])
 
-        # 第一次爬取且没有评论，设置第一次爬取时间作为first_time用于判定下次执行时间
-        cache_data = {
-            "page": page + 1 if total_page > page else page,
-            "first_datetime": first_datetime or datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        }
-        redis.hmset(download_page_key, cache_data)
-        if total_page > page:
-            # 总页数大于当前页数，说明还是有下一页，继续爬取
-            download_comment.apply_async(args=[article_id, 1])
-        else:
-            # 根据first_time 计算下一次爬取时间
-            today = datetime.datetime.today()
-            first_datetime = datetime.datetime.strptime(cache_data['first_datetime'], "%Y-%m-%d %H:%M")
-            if (today - first_datetime).days < 7:
-                # 7天内，10分钟执行一次
-                if (today - first_datetime).days < 1:
-                    days = 1
-                else:
-                    days = (today - first_datetime).days
-                download_comment.apply_async(args=[article_id, 1], countdown=60 * 10 * days)
+                        # 插入月榜信息
+                        sql = """
+                            INSERT INTO hupu_month_list(month_info, person_id, comment_cnt)
+                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                        """
+                        cursor.execute(sql, [month_period, person])
+
+            # 第一次爬取且没有评论，设置第一次爬取时间作为first_time用于判定下次执行时间
+            cache_data = {
+                "page": page + 1 if total_page > page else page,
+                "first_datetime": first_datetime or datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            }
+            redis.hmset(download_page_key, cache_data)
+            if total_page > page:
+                # 总页数大于当前页数，说明还是有下一页，继续爬取
+                download_comment.apply_async(args=[article_id, 1])
             else:
-                # 一天执行一次
-                download_comment.apply_async(args=[article_id, 1], countdown=60 * 60 * 24)
-        if not download_redis_info:
-            # 设置过期时间为15天
-            redis.expire(download_page_key, 15 * 24 * 60 * 60)
+                # 根据first_time 计算下一次爬取时间
+                today = datetime.datetime.today()
+                first_datetime = datetime.datetime.strptime(cache_data['first_datetime'], "%Y-%m-%d %H:%M")
+                if (today - first_datetime).days < 7:
+                    # 7天内，10分钟执行一次
+                    if (today - first_datetime).days < 1:
+                        days = 1
+                    else:
+                        days = (today - first_datetime).days
+                    download_comment.apply_async(args=[article_id, 1], countdown=60 * 10 * days)
+                else:
+                    # 一天执行一次
+                    download_comment.apply_async(args=[article_id, 1], countdown=60 * 60 * 24)
+            if not download_redis_info:
+                # 设置过期时间为15天
+                redis.expire(download_page_key, 15 * 24 * 60 * 60)
     except:
         logger.exception(f"download shh article {article_id} page {page} comment error, fail times {times + 1}")
         if times < 3:
