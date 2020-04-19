@@ -43,8 +43,8 @@ def index_handler():
                     break
                 else:
                     # 记录任务下载文章内容和评论内容
-                    download_article.apply_async(article['article_id'], 1)
-                    download_comment.apply_async(article['article_id'], 1)
+                    download_article.apply_async(args=[article['article_id'], 1])
+                    download_comment.apply_async(args=[article['article_id'], 1])
 
             logger.info(f"spider page {page} end ...")
             logger.info(f"first_article_id = {first_article_id}")
