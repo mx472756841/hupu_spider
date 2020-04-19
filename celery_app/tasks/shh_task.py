@@ -46,6 +46,7 @@ def index_handler():
                     # 文章ID小于则表示已经下载完成，退出循环
                     break
                 else:
+                    logger.info(f"添加到任务队列文章和评论 {article['article_id']} ...")
                     # 记录任务下载文章内容和评论内容
                     download_article.apply_async(args=[article['article_id'], 1], priority=9)
                     download_comment.apply_async(args=[article['article_id'], 1], priority=9)
@@ -218,8 +219,9 @@ def download_comment(article_id, times):
                         insert into hupu_comment(article_id, comment_id, publish_date, author, author_id, comment, reply_comment, kws, persons)
                         value(%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
-                    cursor.execute(sql, [article_id, comment.id, comment.publish_date, comment.author, comment.author_id,
-                                         comment.comment, comment.reply_comment, json.dumps(kws), json.dumps(persons)])
+                    cursor.execute(sql,
+                                   [article_id, comment.id, comment.publish_date, comment.author, comment.author_id,
+                                    comment.comment, comment.reply_comment, json.dumps(kws), json.dumps(persons)])
 
                     for person in persons:
                         # 插入周榜信息
