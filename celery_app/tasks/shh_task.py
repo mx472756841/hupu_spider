@@ -193,14 +193,14 @@ def download_comment(article_id, times):
                     for p in P_CONTENT:
                         reply_comment = re.sub(p, "", comment.reply_comment)
 
-                comment = comment.comment
+                comment_str = comment.comment
                 for p in P_CONTENT:
-                    comment = re.sub(p, "", comment)
+                    comment_str = re.sub(p, "", comment_str)
 
                 if comment.reply_comment and "隐藏" not in comment.reply_comment:
-                    kws = jieba.analyse.extract_tags(",".join([reply_comment, comment]), topK=10)
+                    kws = jieba.analyse.extract_tags(",".join([reply_comment, comment_str]), topK=10)
                 else:
-                    kws = jieba.analyse.extract_tags(comment, topK=10)
+                    kws = jieba.analyse.extract_tags(comment_str, topK=10)
                 # 获取关键字对应人物
                 persons = []
                 for kw in kws:
