@@ -251,7 +251,11 @@ def download_comment(article_id, times):
             first_datetime = datetime.datetime.strptime(cache_data['first_datetime'], "%Y-%m-%d %H:%M")
             if (today - first_datetime).days < 7:
                 # 7天内，10分钟执行一次
-                download_comment.apply_async(args=[article_id, 1], countdown=60 * 30)
+                if (today - first_datetime).days < 1:
+                    days = 1
+                else:
+                    days = (today - first_datetime).days
+                download_comment.apply_async(args=[article_id, 1], countdown=60 * 10 * days)
             else:
                 # 一天执行一次
                 download_comment.apply_async(args=[article_id, 1], countdown=60 * 60 * 24)
