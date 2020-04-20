@@ -41,7 +41,7 @@ if not os.path.exists(LOG_PATH):
 
 log = Log(LOG_PATH, "hupu")
 logging.config.dictConfig(log.log_config_dict)
-logger = logging.getLogger("full_logger")
+logger = logging.getLogger("only_file_logger")
 # 执行自定义配置 如数据库等相关配置, 放在日志配置之前的原因,是日志会根据DEBUG变化而变化
 etc_path = os.path.join(BASE_PATH, "etc", 'cfg.py')
 if os.path.exists(etc_path):
@@ -56,6 +56,3 @@ if os.path.exists(etc_path):
 # celery相关配置,需要使用redis的相关信息,所以写在此处
 CELERY_BROKER_URL = 'redis://:{2}@{0}:{1}'.format(REDIS_HOST, REDIS_PORT, REDIS_PASS)  # 指定 Broker
 CELERY_RESULT_BACKEND = 'redis://:{2}@{0}:{1}/0'.format(REDIS_HOST, REDIS_PORT, REDIS_PASS)  # 指定 Backend
-
-
-
