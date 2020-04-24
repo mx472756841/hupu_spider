@@ -130,6 +130,17 @@ def spider(queue):
     # 保证每个进程都停掉
     queue.put(None)
 
+def test():
+    from tools.db import RedisClient
+    from tools.utils import recursive_unicode
+    import json
+    client = RedisClient.get_client()
+    all_data = client.lrange("celelry", 0, -1)
+    for line in all_data:
+        line = json.loads(recursive_unicode(line))
+        if line['headers']['task'] == "celery_app.tasks.shh_task.download_article":
+            print(line)
+
 
 if __name__ == "__main__":
     download_comments(33487046, 1)
