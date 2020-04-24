@@ -140,7 +140,6 @@ def download_article(article_id, times):
                         VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
                     """
                     cursor.execute(sql, [month_period, person])
-
         logger.info(f"end spider article {article_id}")
     except:
         logger.exception(f"download shh article {article_id} error, fail times {times + 1}")

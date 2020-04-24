@@ -39,7 +39,7 @@ def fetch(url, **kwargs):
         response = requests.get(url, **kwargs)
         logger.info("url= {} status_code ={}".format(url, response.status_code))
         if response.status_code == 404:
-            return ""
+            return None
         elif response.status_code != 200:
             raise requests.ConnectionError('Expected status code 200, but got {}'.format(response.status_code))
         return response.content

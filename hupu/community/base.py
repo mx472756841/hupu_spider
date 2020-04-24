@@ -63,7 +63,7 @@ def get_article(article_id):
             images=image_urls,
             videos=video_urls
         ) if title else None
-    elif not result:
+    elif result is None:
         # 文章已被删除
         logger.info(f"real_article_url {real_article_url} result = {result}")
         return None
@@ -114,7 +114,7 @@ def get_commtents(article_id, page):
         return_data["current_comments"] = return_comments
 
         return return_data
-    elif not result:
+    elif result is None:
         # 文章已被删除
         return None
     else:
