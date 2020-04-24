@@ -76,6 +76,7 @@ def download_article(article_id, times):
     :return:
     """
     try:
+        logger.info(f"start spider article {article_id}")
         with get_conn().cursor() as cursor:
             sql = "select id from hupu_article where id = %s"
             cursor.execute(sql, article_id)
@@ -139,6 +140,8 @@ def download_article(article_id, times):
                         VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
                     """
                     cursor.execute(sql, [month_period, person])
+
+        logger.info(f"end spider article {article_id}")
     except:
         logger.exception(f"download shh article {article_id} error, fail times {times + 1}")
         if times < 3:
