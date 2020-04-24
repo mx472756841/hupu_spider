@@ -2,6 +2,7 @@ import requests
 from retrying import retry
 
 from hupu.config import retry_max_number, retry_min_random_wait, retry_max_random_wait, fetch_timeout
+from settings import logger
 
 
 def need_retry(exception):
@@ -36,6 +37,7 @@ def fetch(url, **kwargs):
         kwargs.update({'verify': False})
         kwargs.update({'timeout': fetch_timeout})
         response = requests.get(url, **kwargs)
+        logger.info("url={}".format(response.status_code))
         if response.status_code == 404:
             return ""
         elif response.status_code != 200:
