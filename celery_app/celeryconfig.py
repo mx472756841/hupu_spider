@@ -8,16 +8,16 @@ import settings
 broker_url = settings.CELERY_BROKER_URL  # 指定 Broker
 result_backend = settings.CELERY_RESULT_BACKEND  # 指定 Backend
 result_expires = datetime.timedelta(hours=1)
-CELERY_TIMEZONE = 'Asia/Shanghai'  # 指定时区，默认是 UTC
-CELERY_TASK_SERIALIZER = 'json'  # 指定task序列化方式
-CELERY_RESULT_SERIALIZER = 'json'  # 指定结果序列化方式
-CELERY_ACCEPT_CONTENT = ['json']  # 指定接收内容序列化方式
+timezone = 'Asia/Shanghai'  # 指定时区，默认是 UTC
+task_serializer = 'json'  # 指定task序列化方式
+result_serializer = 'json'  # 指定结果序列化方式
+accept_content = ['json']  # 指定接收内容序列化方式
 
 imports = (  # 指定导入的任务模块
     'celery_app.tasks.shh_task',
 )
 
-CELERYBEAT_SCHEDULE = {
+beat_schedule = {
     "shh_index": {
         'task': 'celery_app.tasks.shh_task.index_handler',
         'schedule': crontab(minute="*/6"),
