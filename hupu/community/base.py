@@ -5,6 +5,7 @@ from pyquery.pyquery import PyQuery as pquery
 
 from hupu.structures import *
 from hupu.utils.fetch import fetch
+from settings import logger
 
 PAGE_COUNT = re.compile("pageCount:(?P<page_count>\d+)", re.S)
 
@@ -64,6 +65,7 @@ def get_article(article_id):
         ) if title else None
     elif not result:
         # 文章已被删除
+        logger.info(f"real_article_url {real_article_url} result = {result}")
         return None
     else:
         raise RuntimeError(f"get article {article_id} error!!!")
