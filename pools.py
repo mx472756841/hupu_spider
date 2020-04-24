@@ -136,6 +136,7 @@ def test():
     import json
     client = RedisClient.get_client()
     all_data = client.lrange("celelry", 0, -1)
+    print(len(all_data))
     for line in all_data:
         line = json.loads(recursive_unicode(line))
         if line['headers']['task'] == "celery_app.tasks.shh_task.download_article":
