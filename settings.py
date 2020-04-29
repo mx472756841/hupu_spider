@@ -11,8 +11,8 @@ BASE_PATH = os.path.abspath(os.path.dirname(__file__))
 LOG_PATH = os.path.join(BASE_PATH, 'logs')
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "115.159.119.204")
-REDIS_PORT = int(os.environ.get("REDIS_PORT", 6380))
-REDIS_PASS = os.environ.get("REDIS_PASS", "CCcaQagK21A1")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", 6381))
+REDIS_PASS = os.environ.get("REDIS_PASS", "CCcaQagK21A1A12")
 REDIS_DB = int(os.environ.get("REDIS_DB", 0))
 
 MYSQL_DB_HOST = os.environ.get("MYSQL_DB_HOST", "115.159.119.204")
