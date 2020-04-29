@@ -34,6 +34,9 @@ LAST_DOWNLOAD_ARTICLE_ID_KEY = "last:download:article:id"
 # 第一条评论的日期 + 下载的页数，后续会根据第一条评论的日期，记录次数，7天之内，每30分钟执行一次， 7天之后，每天执行一次
 ARTICLE_DOWNLOAD_COMMENT_PAGE = "article:%s:download:comment:page:hash"
 
+# 中间key，celery定时调度常常有问题，增加中间key，使用apscheduler调度，列表内容为字典，func_name, args, task_id作为key
+CELERY_TO_APSCHEDULER_LIST = "celery:2:apscheduler:list"
+
 # 日志模块配置
 if not os.path.exists(LOG_PATH):
     # 创建日志文件夹

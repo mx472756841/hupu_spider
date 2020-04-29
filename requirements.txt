@@ -1,8 +1,9 @@
 requests==2.21
-jieba
-pyquery
+jieba==0.42.1
+pyquery==1.4.1
 fake_useragent
 retrying
-pymysql
-redis
-celery
+pymysql==0.9.3
+redis==2.10.6
+celery==4.4.2
+apscheduler==3.5.3

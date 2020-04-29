@@ -4,6 +4,7 @@ import re
 
 import jieba.analyse
 
+import settings
 from celery_app import app
 from hupu.community.base import get_article, get_commtents, get_article_list
 from settings import logger, ARTICLE_DOWNLOAD_COMMENT_PAGE, LAST_DOWNLOAD_ARTICLE_ID_KEY, HUPU_DOWNLOAD_COOKIES_KEY
@@ -145,7 +146,17 @@ def download_article(article_id, times):
         logger.exception(f"download shh article {article_id} error, fail times {times + 1}")
         if times < 3:
             # 最多不超过3次, 三分钟之后再次执行
-            download_article.apply_async(args=[article_id, times + 1], countdown=60 * 3)
+            # download_article.apply_async(args=[article_id, times + 1], countdown=60 * 3)
+            redis_client = RedisClient.get_client()
+            task_data = {
+                "func_name": "download_article",
+                "args": [article_id, times + 1],
+                "task_id": f"download_article_{article_id}",
+                "execute_datetime": (datetime.datetime.now() + datetime.timedelta(minutes=3)).strftime(
+                    "%Y-%m-%d %H:%M:%S")
+            }
+            redis_client.rpush(settings.CELERY_TO_APSCHEDULER_LIST, json.dumps(task_data))
+
         else:
             logger.error(f"fail max times 3, article {article_id} fail times {times + 1} ")
 
@@ -259,10 +270,29 @@ def download_comment(article_id, times):
                         days = 1
                     else:
                         days = (today - first_datetime).days
-                    download_comment.apply_async(args=[article_id, 1], countdown=60 * 10 * days)
+
+                    # download_comment.apply_async(args=[article_id, 1], countdown=60 * 10 * days)
+                    task_data = {
+                        "func_name": "download_comment",
+                        "args": [article_id, 1],
+                        "task_id": f"download_comment_{article_id}",
+                        "execute_datetime": (datetime.datetime.now() + datetime.timedelta(minutes=10 * days)).strftime(
+                            "%Y-%m-%d %H:%M:%S")
+                    }
+                    redis.rpush(settings.CELERY_TO_APSCHEDULER_LIST, json.dumps(task_data))
                 else:
                     # 一天执行一次
-                    download_comment.apply_async(args=[article_id, 1], countdown=60 * 60 * 24)
+                    # download_comment.apply_async(args=[article_id, 1], countdown=60 * 60 * 24)
+
+                    task_data = {
+                        "func_name": "download_comment",
+                        "args": [article_id, 1],
+                        "task_id": f"download_comment_{article_id}",
+                        "execute_datetime": (datetime.datetime.now() + datetime.timedelta(minutes=60 * 24)).strftime(
+                            "%Y-%m-%d %H:%M:%S")
+                    }
+                    redis.rpush(settings.CELERY_TO_APSCHEDULER_LIST, json.dumps(task_data))
+
             if not download_redis_info:
                 # 设置过期时间为15天
                 redis.expire(download_page_key, 15 * 24 * 60 * 60)
@@ -270,6 +300,15 @@ def download_comment(article_id, times):
         logger.exception(f"download shh article {article_id} page {page} comment error, fail times {times + 1}")
         if times < 3:
             # 最多不超过3次, 三分钟之后再次执行
-            download_comment.apply_async(args=[article_id, times + 1], countdown=60 * 3)
+            # download_comment.apply_async(args=[article_id, times + 1], countdown=60 * 3)
+            redis_client = RedisClient.get_client()
+            task_data = {
+                "func_name": "download_comment",
+                "args": [article_id, times + 1],
+                "task_id": f"download_comment_{article_id}",
+                "execute_datetime": (datetime.datetime.now() + datetime.timedelta(minutes=3)).strftime(
+                    "%Y-%m-%d %H:%M:%S")
+            }
+            redis_client.rpush(settings.CELERY_TO_APSCHEDULER_LIST, json.dumps(task_data))
         else:
             logger.error(f"fail max times 3, article {article_id} page {page} comment fail times {times + 1} ")
