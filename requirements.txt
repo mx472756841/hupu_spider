@@ -5,5 +5,5 @@ fake_useragent
 retrying
 pymysql==0.9.3
 redis==2.10.6
-celery==4.4.2
+celery==4.2.1
 apscheduler==3.5.3
