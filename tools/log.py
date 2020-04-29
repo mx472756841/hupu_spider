@@ -65,7 +65,7 @@ class Log:
                 # info文件输出
                 'info_file': {
                     'level': 'INFO',
-                    'formatter': 'json',
+                    'formatter': 'simple',
                     'class': 'logging.handlers.TimedRotatingFileHandler',
                     'filename': '{0}/{1}_info.log'.format(log_path, service_name),
                     'when': log_split_type,
@@ -77,7 +77,7 @@ class Log:
                 # error文件输出
                 'error_file': {
                     'level': 'ERROR',
-                    'formatter': 'json',
+                    'formatter': 'simple',
                     'class': 'logging.handlers.TimedRotatingFileHandler',
                     'filename': '{0}/{1}_error.log'.format(log_path, service_name),
                     'when': log_split_type,
