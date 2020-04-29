@@ -62,7 +62,7 @@ def scheduler_start():
     settings.logger.info("start scheduler ok ...")
     # 每隔60s，执行一次心跳
     if not scheduler.get_job('scheduler_sipder_task'):
-        scheduler.add_job(scheduler_sipder_task, id='heart-beat', trigger='interval', seconds=60, misfire_grace_time=10)
+        scheduler.add_job(scheduler_sipder_task, id='scheduler_sipder_task', trigger='interval', seconds=60, misfire_grace_time=10)
 
 
 def main():
