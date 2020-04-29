@@ -14,9 +14,9 @@ from tools.utils import recursive_unicode
 
 def delay_run_spider_task(func_name, args):
     if func_name == "download_article":
-        shh_task.download_article.async_apply(args=args)
+        shh_task.download_article.apply_async(args=args)
     elif func_name == "download_comment":
-        shh_task.download_article.async_apply(args=args)
+        shh_task.download_comment.apply_async(args=args)
     else:
         settings.logger.error(f"暂时不支持的爬虫任务{func_name} args = {args}")
 
@@ -62,7 +62,8 @@ def scheduler_start():
     settings.logger.info("start scheduler ok ...")
     # 每隔60s，执行一次心跳
     if not scheduler.get_job('scheduler_sipder_task'):
-        scheduler.add_job(scheduler_sipder_task, id='scheduler_sipder_task', trigger='interval', seconds=60, misfire_grace_time=10)
+        scheduler.add_job(scheduler_sipder_task, id='scheduler_sipder_task', trigger='interval', seconds=60,
+                          misfire_grace_time=10)
 
 
 def main():
