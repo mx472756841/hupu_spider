@@ -39,6 +39,9 @@ def get_player(kw):
         settings.logger.exception("获取人物信息异常")
         return []
 
+def get_day_period(datetime_str, format="%Y-%m-%d %H:%M"):
+    dt = datetime.datetime.strptime(datetime_str, format)
+
 
 def get_week_period(datetime_str, format="%Y-%m-%d %H:%M"):
     """

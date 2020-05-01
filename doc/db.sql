@@ -41,6 +41,16 @@ CREATE TABLE `person_info`(
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='常用人员信息表';
 
+CREATE TABLE `hupu_day_list`(
+  `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id',
+  `day` varchar(10) NOT NULL COMMENT 'yyyy-mm-dd',
+  `person_id` int(11) NOT NULL COMMENT '人员ID',
+  `comment_cnt` int(11) DEFAULT 0 NOT NULL COMMENT '相关评论',
+  `article_cnt` int(11) DEFAULT 0 NOT NULL COMMENT '相关文章',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `person_day` (`person_id`, `day`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='日榜';
+
 CREATE TABLE `hupu_week_list`(
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id',
   `week_info` varchar(17) NOT NULL COMMENT 'yyyymmdd-yyyymmdd',

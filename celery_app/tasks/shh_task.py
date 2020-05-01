@@ -130,6 +130,13 @@ def download_article(article_id, times):
                 for person in persons:
                     # 插入周榜信息
                     sql = """
+                        INSERT INTO hupu_day_list(`day`, person_id, article_cnt)
+                        VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
+                    """
+                    cursor.execute(sql, [article.publish_date[:10], person])
+
+                    # 插入周榜信息
+                    sql = """
                         INSERT INTO hupu_week_list(week_info, person_id, article_cnt)
                         VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
                     """
@@ -237,6 +244,13 @@ def download_comment(article_id, times):
                                     comment.comment, comment.reply_comment, json.dumps(kws), json.dumps(persons)])
 
                     for person in persons:
+                        # 插入日榜信息
+                        sql = """
+                            INSERT INTO hupu_day_list(`day`, person_id, comment_cnt)
+                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                        """
+                        cursor.execute(sql, [comment.publish_date[:10], person])
+
                         # 插入周榜信息
                         sql = """
                             INSERT INTO hupu_week_list(week_info, person_id, comment_cnt)
