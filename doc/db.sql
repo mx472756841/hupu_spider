@@ -1,3 +1,31 @@
+CREATE TABLE `user_info` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `openid` varchar(50) NOT NULL COMMENT '用户微信ID',
+  `unionid` varchar(100) COMMENT '用户微信 UNIOIN ID',
+  `nickname` varchar(100) COMMENT '用户昵称',
+  `avatar` varchar(300) COMMENT '用户头像',
+  `city` varchar(100) COMMENT '城市',
+  `province` varchar(100) COMMENT '城市',
+  `country` varchar(100) COMMENT '国家',
+  `language` varchar(100) COMMENT '语言',
+  `gender` varchar(5) COMMENT '性别',
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `openid` (`openid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+CREATE TABLE `user_suggest`(
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL COMMENT '用户ID',
+  `suggest` text COMMENT '用户建议',
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `user_id`(`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE `hupu_article` (
   `id` int(11) NOT NULL,
   `title` varchar(500) NOT NULL COMMENT '文章标题',
