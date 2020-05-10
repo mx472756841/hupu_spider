@@ -73,7 +73,7 @@ def main():
                         persons 
                     FROM
                         hupu_comment 
-                    WHERE id > {} limit 5000
+                    WHERE id > {} order by id asc limit 5000
                 """.format(i)
                 cursor.execute(sql)
                 comments = cursor.fetchall()
