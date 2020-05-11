@@ -179,6 +179,9 @@ def index_handler():
                     max_times = max_times - 1
                     time.sleep(60)
                 print(f"spider page {page} end ...")
+            if page % 40 == 0:
+                print(f"暂停10分钟，等待处理，防止celery worker不足")
+                time.sleep(60 * 10)
     except:
         logger.exception("补充下载异常")
 
