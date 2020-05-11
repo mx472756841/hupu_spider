@@ -1,7 +1,8 @@
+import datetime
 import json
 
 import pymysql
-import datetime
+
 from settings import logger
 
 
@@ -56,8 +57,8 @@ def main():
     try:
         logger.info("处理历史评论开始")
         print(f"{datetime.datetime.now()} 处理历史评论开始")
-        for i in range(5000, 1212016, 5000):
-            print(f"{datetime.datetime.now()} 开始处理第{(i/5000 + 1) * 5000}条评论")
+        for i in range(930000, 1212016, 5000):
+            print(f"{datetime.datetime.now()} 开始处理第{(i / 5000 + 1) * 5000}条评论")
             connection = pymysql.connect(host='115.159.119.204',
                                          user='root',
                                          password='BnakQkfF2sf1',
@@ -76,9 +77,18 @@ def main():
                     WHERE id > {} order by id asc limit 5000
                 """.format(i)
                 cursor.execute(sql)
-                comments = cursor.fetchall()
-                print(f"{datetime.datetime.now()} 本次共处理第{len(comments)}条评论")
-                for comment in comments:
+            comments = cursor.fetchall()
+            connection.close()
+            print(f"{datetime.datetime.now()} 本次共处理第{len(comments)}条评论")
+            for comment in comments:
+                connection = pymysql.connect(host='115.159.119.204',
+                                             user='root',
+                                             password='BnakQkfF2sf1',
+                                             db='hupu',
+                                             port=10020,
+                                             charset='utf8mb4',
+                                             cursorclass=pymysql.cursors.DictCursor)
+                with connection.cursor() as cursor:
                     try:
                         persons = json.loads(comment['persons'])
                         for person in persons:
@@ -90,9 +100,10 @@ def main():
                             cursor.execute(sql, [comment['datestr'], person])
                     except:
                         logger.exception(f"处理失败 {comment}")
-            connection.commit()
+                connection.commit()
+                connection.close()
 
-            print(f"{datetime.datetime.now()} 处理完成第{(i/5000 + 1) * 5000}条评论")
+            print(f"{datetime.datetime.now()} 处理完成第{(i / 5000 + 1) * 5000}条评论")
 
         print(f"{datetime.datetime.now()} 处理历史评论结束")
     except:
