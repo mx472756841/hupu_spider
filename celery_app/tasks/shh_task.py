@@ -294,7 +294,7 @@ def download_comment(article_id, times):
                             "%Y-%m-%d %H:%M:%S")
                     }
                     redis.rpush(settings.CELERY_TO_APSCHEDULER_LIST, json.dumps(task_data))
-                else:
+                elif (today - first_datetime).days < 16:
                     # 一天执行一次
                     # download_comment.apply_async(args=[article_id, 1], countdown=60 * 60 * 24)
 
@@ -306,6 +306,8 @@ def download_comment(article_id, times):
                             "%Y-%m-%d %H:%M:%S")
                     }
                     redis.rpush(settings.CELERY_TO_APSCHEDULER_LIST, json.dumps(task_data))
+                else:
+                    logger.info(f"超过{(today - first_datetime).days}天，不再执行任务")
 
             if not download_redis_info:
                 # 设置过期时间为15天
