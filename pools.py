@@ -95,6 +95,7 @@ def download_article(article_id):
                         cursor.execute(sql, [month_period, person])
                 conn.commit()
             logger.info(f"end spider article {article_id}")
+            break
         except:
             print(f"文章{article_id}下载失败，倒数{max_times}次,等待10s再下载")
             time.sleep(10)
@@ -280,10 +281,12 @@ def download_comment(article_id):
                                     print(f"文章{article_id} 评论{comment}插入数据库失败")
                                 finally:
                                     conn.close()
+                            break
                         except:
                             print(f"下载文章{article_id} 第{real_page}页评论失败倒数{max_times}次 暂停10s再次请求")
                             time.sleep(10)
                             max_times = max_times - 1
+                break
         except:
             print(f"下载文章{article_id}评论第1页失败，等待10s在处理，倒数失败次数{total_times}")
             total_times = total_times - 1
@@ -343,7 +346,7 @@ def index_handler():
     try:
         client = RedisClient.get_client()
         # for page in range(500, 3390):
-        for page in range(393, 394):
+        for page in range(393, 3400):
             print(f"spider page {page} start ...")
             # 获取虎扑cookies，下载超过10页时就必须使用cookie，防止每次修改cookie时重启服务，将cookie存入缓存
             cookies = json.loads(recursive_unicode(client.get(HUPU_DOWNLOAD_COOKIES_KEY)))
