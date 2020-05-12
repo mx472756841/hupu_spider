@@ -47,7 +47,7 @@ def job_unusual(event):
         # 如果是过期，就在当前时间再加5分钟后执行
         client = RedisClient.get_client()
         if event.job_id.startswith("download_comment_"):
-            seconds = random.randint([60, 9000])
+            seconds = random.randint(60, 9000)
             settings.logger.info(f"任务{event.job_id}过期未执行，将在当前时间{seconds}秒钟后再次执行")
             task_data = {
                 "func_name": "download_comment",
