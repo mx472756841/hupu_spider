@@ -199,95 +199,98 @@ def download_comment(article_id):
                         conn.close()
                 print(f"文章{article_id} 第1页 评论下载完成")
                 # 下载剩余页数
-                for real_page in range(2, total_page + 1):
-                    max_times = 3
-                    print(f"开始下载 文章{article_id} 第{real_page}页 评论")
-                    while max_times:
-                        try:
-                            comments = get_commtents(article_id, 1)
-                            current_comments = comments['current_comments']
-                            for comment in current_comments:
-                                conn = get_conn()
-                                try:
-                                    with conn.cursor() as cursor:
-                                        sql = "select id from hupu_comment where article_id = %s and comment_id = %s"
-                                        cursor.execute(sql, [article_id, comment.id])
-                                        db_info = cursor.fetchone()
-                                        if db_info:
-                                            # 已插入数据库则跳过
-                                            continue
+                if total_page > 1:
+                    for real_page in range(2, total_page + 1):
+                        max_times = 3
+                        print(f"开始下载 文章{article_id} 第{real_page}页 评论")
+                        while max_times:
+                            try:
+                                comments = get_commtents(article_id, 1)
+                                current_comments = comments['current_comments']
+                                for comment in current_comments:
+                                    conn = get_conn()
+                                    try:
+                                        with conn.cursor() as cursor:
+                                            sql = "select id from hupu_comment where article_id = %s and comment_id = %s"
+                                            cursor.execute(sql, [article_id, comment.id])
+                                            db_info = cursor.fetchone()
+                                            if db_info:
+                                                # 已插入数据库则跳过
+                                                print(f"该评论已经存在 {db_info} {article_id} {comment.id}")
+                                                continue
 
-                                        # 结巴分词解析content的关键词
-                                        # 文本中有链接时，分词时会将部分关键词分出来，因此分词时要将文章中链接删除
-                                        reply_comment = comment.reply_comment
-                                        if reply_comment:
+                                            # 结巴分词解析content的关键词
+                                            # 文本中有链接时，分词时会将部分关键词分出来，因此分词时要将文章中链接删除
+                                            reply_comment = comment.reply_comment
+                                            if reply_comment:
+                                                for p in P_CONTENT:
+                                                    reply_comment = re.sub(p, "", comment.reply_comment)
+
+                                            comment_str = comment.comment
                                             for p in P_CONTENT:
-                                                reply_comment = re.sub(p, "", comment.reply_comment)
+                                                comment_str = re.sub(p, "", comment_str)
 
-                                        comment_str = comment.comment
-                                        for p in P_CONTENT:
-                                            comment_str = re.sub(p, "", comment_str)
+                                            if comment.reply_comment and "隐藏" not in comment.reply_comment:
+                                                kws = jieba.analyse.extract_tags(",".join([reply_comment, comment_str]),
+                                                                                 topK=10)
+                                            else:
+                                                kws = jieba.analyse.extract_tags(comment_str, topK=10)
+                                            # 获取关键字对应人物
+                                            persons = []
+                                            for kw in kws:
+                                                persons.extend(get_player(kw))
+                                            if persons:
+                                                persons = list(set(persons))
 
-                                        if comment.reply_comment and "隐藏" not in comment.reply_comment:
-                                            kws = jieba.analyse.extract_tags(",".join([reply_comment, comment_str]),
-                                                                             topK=10)
-                                        else:
-                                            kws = jieba.analyse.extract_tags(comment_str, topK=10)
-                                        # 获取关键字对应人物
-                                        persons = []
-                                        for kw in kws:
-                                            persons.extend(get_player(kw))
-                                        if persons:
-                                            persons = list(set(persons))
+                                            # 根据人物插入周榜数据
+                                            week_period = get_week_period(comment.publish_date)
+                                            # 根据人物插入月榜数据
+                                            month_period = get_month_period(comment.publish_date)
 
-                                        # 根据人物插入周榜数据
-                                        week_period = get_week_period(comment.publish_date)
-                                        # 根据人物插入月榜数据
-                                        month_period = get_month_period(comment.publish_date)
+                                            # 插入评论表
+                                            sql = """
+                                                insert into hupu_comment(article_id, comment_id, publish_date, author, author_id, comment, reply_comment, kws, persons)
+                                                value(%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                            """
+                                            cursor.execute(sql,
+                                                           [article_id, comment.id, comment.publish_date,
+                                                            comment.author,
+                                                            comment.author_id,
+                                                            comment.comment, comment.reply_comment, json.dumps(kws),
+                                                            json.dumps(persons)])
 
-                                        # 插入评论表
-                                        sql = """
-                                                    insert into hupu_comment(article_id, comment_id, publish_date, author, author_id, comment, reply_comment, kws, persons)
-                                                    value(%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                            for person in persons:
+                                                # 插入日榜信息
+                                                sql = """
+                                                    INSERT INTO hupu_day_list(`day`, person_id, comment_cnt)
+                                                    VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
                                                 """
-                                        cursor.execute(sql,
-                                                       [article_id, comment.id, comment.publish_date, comment.author,
-                                                        comment.author_id,
-                                                        comment.comment, comment.reply_comment, json.dumps(kws),
-                                                        json.dumps(persons)])
+                                                cursor.execute(sql, [comment.publish_date[:10], person])
 
-                                        for person in persons:
-                                            # 插入日榜信息
-                                            sql = """
-                                                        INSERT INTO hupu_day_list(`day`, person_id, comment_cnt)
-                                                        VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
-                                                    """
-                                            cursor.execute(sql, [comment.publish_date[:10], person])
-
-                                            # 插入周榜信息
-                                            sql = """
+                                                # 插入周榜信息
+                                                sql = """
                                                         INSERT INTO hupu_week_list(week_info, person_id, comment_cnt)
                                                         VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
                                                     """
-                                            cursor.execute(sql, [week_period, person])
+                                                cursor.execute(sql, [week_period, person])
 
-                                            # 插入月榜信息
-                                            sql = """
-                                                        INSERT INTO hupu_month_list(month_info, person_id, comment_cnt)
-                                                        VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
-                                                    """
-                                            cursor.execute(sql, [month_period, person])
-                                    conn.commit()
-                                except:
-                                    print(f"文章{article_id} 评论{comment}插入数据库失败")
-                                finally:
-                                    conn.close()
-                            max_times = 0
-                        except:
-                            print(f"下载文章{article_id} 第{real_page}页评论失败倒数{max_times}次 暂停5s再次请求")
-                            time.sleep(5)
-                            max_times = max_times - 1
-                    print(f"文章{article_id} 第{real_page}页 评论下载完成")
+                                                # 插入月榜信息
+                                                sql = """
+                                                    INSERT INTO hupu_month_list(month_info, person_id, comment_cnt)
+                                                    VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                                                """
+                                                cursor.execute(sql, [month_period, person])
+                                        conn.commit()
+                                    except:
+                                        print(f"文章{article_id} 评论{comment}插入数据库失败")
+                                    finally:
+                                        conn.close()
+                                max_times = 0
+                            except:
+                                print(f"下载文章{article_id} 第{real_page}页评论失败倒数{max_times}次 暂停5s再次请求")
+                                time.sleep(5)
+                                max_times = max_times - 1
+                        print(f"文章{article_id} 第{real_page}页 评论下载完成")
             total_times = 0
         except:
             print(f"下载文章{article_id}评论第1页失败，等待5s在处理，倒数失败次数{total_times}")
@@ -401,4 +404,20 @@ def test_index_handler():
 
 
 if __name__ == "__main__":
-    index_handler()
+    comment_str = "我选kd 面框 低位 无球 样样顶级"
+    kws = jieba.analyse.extract_tags(comment_str, topK=10)
+    print(kws)
+    # index_handler()
+    # article_id = 35359595
+    # ids = set()
+    # for i in range(1, 55):
+    #     try:
+    #         comments = get_commtents(article_id, i)
+    #     except:
+    #         comments = get_commtents(article_id, i)
+    #
+    #
+    #     for z in comments['current_comments']:
+    #         ids.add(int(z.id))
+    #     print(f"第 {i} 页  共 {len(comments['current_comments'])} 条评论")
+    # print(len(ids))

@@ -30,7 +30,7 @@ def get_player(kw):
     """
     try:
         redis_client = RedisClient.get_client()
-        data = redis_client.hget(settings.SHH_KW_HASH, kw)
+        data = redis_client.hget(settings.SHH_KW_HASH, kw.upper())
         if data:
             return json.loads(recursive_unicode(data))
         else:
@@ -38,6 +38,7 @@ def get_player(kw):
     except:
         settings.logger.exception("获取人物信息异常")
         return []
+
 
 def get_day_period(datetime_str, format="%Y-%m-%d %H:%M"):
     dt = datetime.datetime.strptime(datetime_str, format)

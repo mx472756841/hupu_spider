@@ -31,7 +31,7 @@ def init_kw2name_cache():
         if value not in person2id:
             print(key, value, "不存在的用户")
         else:
-            values.append(person2id[value])
+            values.append(person2id[value].upper())
         kw2name_mapping[key] = json.dumps(list(set(values)))
 
     if kw2name_mapping:
