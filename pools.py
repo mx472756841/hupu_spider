@@ -1,107 +1,321 @@
 import json
+import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 
-from celery_app.tasks.shh_task import download_article, download_comment
-from hupu.community.base import get_article_list
+import jieba
+import jieba.analyse
+import pymysql
+
+from celery_app.tasks.shh_task import P_CONTENT
+from hupu.community.base import get_article_list, get_commtents, get_article
 from settings import logger, HUPU_DOWNLOAD_COOKIES_KEY
-from tools.db import RedisClient
-from tools.utils import recursive_unicode
+from tools.db import RedisClient, get_conn
+from tools.utils import recursive_unicode, get_player, get_week_period, get_month_period
 
 
-#
-# def download_comments(article_id, page):
-#     comments = get_commtents(article_id, page)
-#     # 插入数据库
-#     # Connect to the database
-#     connection = pymysql.connect(host='115.159.119.204',
-#                                  user='root',
-#                                  password='BnakQkfF2sf1',
-#                                  db='hupu',
-#                                  port=10020,
-#                                  charset='utf8mb4',
-#                                  cursorclass=pymysql.cursors.DictCursor)
-#
-#     try:
-#         with connection.cursor() as cursor:
-#             for comment in comments:
-#                 # Create a new record
-#                 sql = "select id from hupu_comment where id = %s and article_id = %s"
-#                 cursor.execute(sql, [comment.id, article_id])
-#                 fetch_data = cursor.fetchone()
-#                 if not fetch_data:
-#                     # 结巴分词解析content的关键词
-#                     if comment.reply_comment and "隐藏" not in comment.reply_comment:
-#                         kwords = jieba.cut(",".join([comment.reply_comment, comment.comment]))
-#                     else:
-#                         kwords = jieba.cut(comment.comment)
-#
-#                     # 排除纯数字，纯字符
-#                     finally_kwords = filter(lambda x: not x.isdigit() and len(x) > 1, kwords)
-#                     finally_kwords_str = " ".join(finally_kwords)
-#
-#                     # 本地尚未入库，则插入数据库
-#                     sql = """
-#                         insert into hupu_comment(id, article_id, publish_date, author, author_id, comment, reply_comment, keywards)
-#                         values(%s, %s, %s, %s, %s, %s, %s, %s)
-#                     """
-#                     cursor.execute(sql, [
-#                         comment.id, article_id, comment.publish_date, comment.author,
-#                         comment.author_id, comment.comment, comment.reply_comment, finally_kwords_str
-#                     ])
-#
-#         # connection is not autocommit by default. So you must commit to save
-#         # your changes.
-#         connection.commit()
-#     finally:
-#         connection.close()
-#
-#
-# def download_article(article_id):
-#     # 插入数据库
-#     article = get_article(article_id)
-#     if article:
-#         # Connect to the database
-#         connection = pymysql.connect(host='115.159.119.204',
-#                                      user='root',
-#                                      password='BnakQkfF2sf1',
-#                                      db='hupu',
-#                                      port=10020,
-#                                      charset='utf8mb4',
-#                                      cursorclass=pymysql.cursors.DictCursor)
-#
-#         try:
-#             with connection.cursor() as cursor:
-#                 # Create a new record
-#                 sql = "select id from hupu_article where id = %s"
-#                 cursor.execute(sql, article_id)
-#                 fetch_data = cursor.fetchone()
-#                 if not fetch_data:
-#
-#                     # 结巴分词解析content的关键词
-#                     if article.title in article.content:
-#                         kwords = jieba.cut(article.content)
-#                     else:
-#                         kwords = jieba.cut(" ".join([article.title, article.content]))
-#
-#                     # 排除纯数字，纯字符
-#                     finally_kwords = filter(lambda x: not x.isdigit() and len(x) > 1, kwords)
-#                     finally_kwords_str = " ".join(finally_kwords)
-#
-#                     # 本地尚未入库，则插入数据库
-#                     sql = """
-#                         insert into hupu_article(id, title, publish_date, author, author_id, source, content, keywards)
-#                         values(%s, %s, %s, %s, %s, %s, %s, %s)
-#                     """
-#                     cursor.execute(sql, [
-#                         article.id, article.title, article.publish_date, article.author,
-#                         article.author_id, article.source, article.content, finally_kwords_str
-#                     ])
-#
-#             # connection is not autocommit by default. So you must commit to save
-#             # your changes.
-#             connection.commit()
-#         finally:
-#             connection.close()
+def download_comments(article_id, page):
+    comments = get_commtents(article_id, page)
+    # 插入数据库
+    # Connect to the database
+    connection = pymysql.connect(host='115.159.119.204',
+                                 user='root',
+                                 password='BnakQkfF2sf1',
+                                 db='hupu',
+                                 port=10020,
+                                 charset='utf8mb4',
+                                 cursorclass=pymysql.cursors.DictCursor)
+
+    try:
+        with connection.cursor() as cursor:
+            for comment in comments:
+                # Create a new record
+                sql = "select id from hupu_comment where id = %s and article_id = %s"
+                cursor.execute(sql, [comment.id, article_id])
+                fetch_data = cursor.fetchone()
+                if not fetch_data:
+                    # 结巴分词解析content的关键词
+                    if comment.reply_comment and "隐藏" not in comment.reply_comment:
+                        kwords = jieba.cut(",".join([comment.reply_comment, comment.comment]))
+                    else:
+                        kwords = jieba.cut(comment.comment)
+
+                    # 排除纯数字，纯字符
+                    finally_kwords = filter(lambda x: not x.isdigit() and len(x) > 1, kwords)
+                    finally_kwords_str = " ".join(finally_kwords)
+
+                    # 本地尚未入库，则插入数据库
+                    sql = """
+                        insert into hupu_comment(id, article_id, publish_date, author, author_id, comment, reply_comment, keywards)
+                        values(%s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    cursor.execute(sql, [
+                        comment.id, article_id, comment.publish_date, comment.author,
+                        comment.author_id, comment.comment, comment.reply_comment, finally_kwords_str
+                    ])
+
+        # connection is not autocommit by default. So you must commit to save
+        # your changes.
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def download_article(article_id):
+    # 插入数据库
+    conn = get_conn()
+    try:
+        logger.info(f"start spider article {article_id}")
+        with conn.cursor() as cursor:
+            sql = "select id from hupu_article where id = %s"
+            cursor.execute(sql, article_id)
+            article = cursor.fetchone()
+            if article:
+                logger.warning(f"文章{article_id}已经下载完成，退出")
+                return
+    finally:
+        conn.close()
+    try:
+        article = get_article(article_id)
+        if article:
+            # 文件下载成功
+            # 结巴分词解析content的关键词
+            # 文本中有链接时，分词时会将部分关键词分出来，因此分词时要将文章中链接删除
+            content = article.content
+            for p in P_CONTENT:
+                content = re.sub(p, "", content)
+
+            title = article.title
+            for p in P_CONTENT:
+                title = re.sub(p, "", title)
+
+            if article.title in article.content:
+                kws = jieba.analyse.extract_tags(content, topK=10)
+            else:
+                kws = jieba.analyse.extract_tags(" ".join([title, content]), topK=10)
+            conn = get_conn()
+            with conn.cursor() as cursor:
+                # 获取关键字对应人物
+                persons = []
+                for kw in kws:
+                    persons.extend(get_player(kw))
+                if persons:
+                    persons = list(set(persons))
+
+                # 根据人物插入周榜数据
+                week_period = get_week_period(article.publish_date)
+                # 根据人物插入月榜数据
+                month_period = get_month_period(article.publish_date)
+
+                # 插入文章数据库
+                sql = """
+                    insert into hupu_article(id, title, publish_date, author, author_id, source, content, kws, persons)
+                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(sql, [
+                    article.id, article.title, article.publish_date, article.author,
+                    article.author_id, article.source, article.content, json.dumps(kws), json.dumps(persons)
+                ])
+
+                for person in persons:
+                    # 插入周榜信息
+                    sql = """
+                        INSERT INTO hupu_day_list(`day`, person_id, article_cnt)
+                        VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
+                    """
+                    cursor.execute(sql, [article.publish_date[:10], person])
+
+                    # 插入周榜信息
+                    sql = """
+                                INSERT INTO hupu_week_list(week_info, person_id, article_cnt)
+                                VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
+                            """
+                    cursor.execute(sql, [week_period, person])
+
+                    # 插入月榜信息
+                    sql = """
+                                INSERT INTO hupu_month_list(month_info, person_id, article_cnt)
+                                VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
+                            """
+                    cursor.execute(sql, [month_period, person])
+            conn.commit()
+        logger.info(f"end spider article {article_id}")
+    finally:
+        conn.close()
+
+
+def download_comment(article_id):
+    """
+    下载文章评论
+    1. 一次性下载完成当前所有的评论，并记录到已下载到第几页的评论
+    2. 15天之后的评论就不再下载
+    :param article_id:
+    :param page:
+    :return:
+    """
+    comments = get_commtents(article_id, 1)
+    if comments:
+        # 当前文章的总评论页数
+        total_page = comments['total_page']
+        # 当前页的文章评论信息
+        current_comments = comments['current_comments']
+        for comment in current_comments:
+            conn = get_conn()
+            try:
+                with conn.cursor() as cursor:
+                    sql = "select id from hupu_comment where article_id = %s and comment_id = %s"
+                    cursor.execute(sql, [article_id, comment.id])
+                    db_info = cursor.fetchone()
+                    if db_info:
+                        # 已插入数据库则跳过
+                        continue
+
+                    # 结巴分词解析content的关键词
+                    # 文本中有链接时，分词时会将部分关键词分出来，因此分词时要将文章中链接删除
+                    reply_comment = comment.reply_comment
+                    if reply_comment:
+                        for p in P_CONTENT:
+                            reply_comment = re.sub(p, "", comment.reply_comment)
+
+                    comment_str = comment.comment
+                    for p in P_CONTENT:
+                        comment_str = re.sub(p, "", comment_str)
+
+                    if comment.reply_comment and "隐藏" not in comment.reply_comment:
+                        kws = jieba.analyse.extract_tags(",".join([reply_comment, comment_str]), topK=10)
+                    else:
+                        kws = jieba.analyse.extract_tags(comment_str, topK=10)
+                    # 获取关键字对应人物
+                    persons = []
+                    for kw in kws:
+                        persons.extend(get_player(kw))
+                    if persons:
+                        persons = list(set(persons))
+
+                    # 根据人物插入周榜数据
+                    week_period = get_week_period(comment.publish_date)
+                    # 根据人物插入月榜数据
+                    month_period = get_month_period(comment.publish_date)
+
+                    # 插入评论表
+                    sql = """
+                        insert into hupu_comment(article_id, comment_id, publish_date, author, author_id, comment, reply_comment, kws, persons)
+                        value(%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    cursor.execute(sql,
+                                   [article_id, comment.id, comment.publish_date, comment.author, comment.author_id,
+                                    comment.comment, comment.reply_comment, json.dumps(kws), json.dumps(persons)])
+
+                    for person in persons:
+                        # 插入日榜信息
+                        sql = """
+                            INSERT INTO hupu_day_list(`day`, person_id, comment_cnt)
+                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                        """
+                        cursor.execute(sql, [comment.publish_date[:10], person])
+
+                        # 插入周榜信息
+                        sql = """
+                            INSERT INTO hupu_week_list(week_info, person_id, comment_cnt)
+                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                        """
+                        cursor.execute(sql, [week_period, person])
+
+                        # 插入月榜信息
+                        sql = """
+                            INSERT INTO hupu_month_list(month_info, person_id, comment_cnt)
+                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                        """
+                        cursor.execute(sql, [month_period, person])
+                conn.commit()
+            finally:
+                conn.close()
+
+        # 下载剩余页数
+        for real_page in range(2, total_page + 1):
+            max_times = 3
+            while max_times:
+                try:
+                    comments = get_commtents(article_id, 1)
+                    current_comments = comments['current_comments']
+                    for comment in current_comments:
+                        conn = get_conn()
+                        try:
+                            with conn.cursor() as cursor:
+                                sql = "select id from hupu_comment where article_id = %s and comment_id = %s"
+                                cursor.execute(sql, [article_id, comment.id])
+                                db_info = cursor.fetchone()
+                                if db_info:
+                                    # 已插入数据库则跳过
+                                    continue
+
+                                # 结巴分词解析content的关键词
+                                # 文本中有链接时，分词时会将部分关键词分出来，因此分词时要将文章中链接删除
+                                reply_comment = comment.reply_comment
+                                if reply_comment:
+                                    for p in P_CONTENT:
+                                        reply_comment = re.sub(p, "", comment.reply_comment)
+
+                                comment_str = comment.comment
+                                for p in P_CONTENT:
+                                    comment_str = re.sub(p, "", comment_str)
+
+                                if comment.reply_comment and "隐藏" not in comment.reply_comment:
+                                    kws = jieba.analyse.extract_tags(",".join([reply_comment, comment_str]), topK=10)
+                                else:
+                                    kws = jieba.analyse.extract_tags(comment_str, topK=10)
+                                # 获取关键字对应人物
+                                persons = []
+                                for kw in kws:
+                                    persons.extend(get_player(kw))
+                                if persons:
+                                    persons = list(set(persons))
+
+                                # 根据人物插入周榜数据
+                                week_period = get_week_period(comment.publish_date)
+                                # 根据人物插入月榜数据
+                                month_period = get_month_period(comment.publish_date)
+
+                                # 插入评论表
+                                sql = """
+                                            insert into hupu_comment(article_id, comment_id, publish_date, author, author_id, comment, reply_comment, kws, persons)
+                                            value(%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                        """
+                                cursor.execute(sql,
+                                               [article_id, comment.id, comment.publish_date, comment.author,
+                                                comment.author_id,
+                                                comment.comment, comment.reply_comment, json.dumps(kws),
+                                                json.dumps(persons)])
+
+                                for person in persons:
+                                    # 插入日榜信息
+                                    sql = """
+                                                INSERT INTO hupu_day_list(`day`, person_id, comment_cnt)
+                                                VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                                            """
+                                    cursor.execute(sql, [comment.publish_date[:10], person])
+
+                                    # 插入周榜信息
+                                    sql = """
+                                                INSERT INTO hupu_week_list(week_info, person_id, comment_cnt)
+                                                VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                                            """
+                                    cursor.execute(sql, [week_period, person])
+
+                                    # 插入月榜信息
+                                    sql = """
+                                                INSERT INTO hupu_month_list(month_info, person_id, comment_cnt)
+                                                VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                                            """
+                                    cursor.execute(sql, [month_period, person])
+                            conn.commit()
+                        except:
+                            print(f"文章{article_id} 评论{comment}插入数据库失败")
+                        finally:
+                            conn.close()
+                except:
+                    print(f"下载文章{article_id} 第{real_page}页评论失败倒数{max_times}次 暂停10s再次请求")
+                    time.sleep(10)
 
 
 # def spider(queue):
@@ -152,10 +366,12 @@ def index_handler():
     下载4月1号-2019年的所有文章数据
     :return:
     """
+    executor = ThreadPoolExecutor(4)
     min_article_id = 29629263
     try:
         client = RedisClient.get_client()
-        for page in range(373, 3390):
+        # for page in range(500, 3390):
+        for page in range(393, 394):
             print(f"spider page {page} start ...")
             # 获取虎扑cookies，下载超过10页时就必须使用cookie，防止每次修改cookie时重启服务，将cookie存入缓存
             cookies = json.loads(recursive_unicode(client.get(HUPU_DOWNLOAD_COOKIES_KEY)))
@@ -171,8 +387,11 @@ def index_handler():
                         else:
                             logger.info(f"添加到任务队列文章和评论 {article['article_id']} ...")
                             # 记录任务下载文章内容和评论内容
-                            download_article.apply_async(args=[article['article_id'], 1])
-                            download_comment.apply_async(args=[article['article_id'], 1])
+                            print(f"开始下载文章{article['article_id']}")
+                            executor.submit(download_article, article['article_id'])
+                            print(f"开始下载文章的评论{article['article_id']}")
+                            executor.submut(download_comment, article['article_id'])
+                            # download_article(article['article_id'])
                     break
                 except:
                     logger.error("下载失败，等待1分钟再下载")
@@ -194,4 +413,4 @@ def test_index_handler():
 
 
 if __name__ == "__main__":
-    test_index_handler()
+    index_handler()
