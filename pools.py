@@ -317,7 +317,7 @@ def index_handler():
     下载4月1号-2019年的所有文章数据
     :return:
     """
-    executor = ThreadPoolExecutor(4)
+    executor = ThreadPoolExecutor(10)
     min_article_id = 29628263
     try:
         client = RedisClient.get_client()
@@ -356,9 +356,6 @@ def index_handler():
                     max_times = max_times - 1
                     time.sleep(60)
                 print(f"spider page {page} end ...")
-            if page % 20 == 0:
-                print(f"暂停10分钟，等待处理，防止celery worker不足")
-                time.sleep(60 * 10)
 
         # 全部执行完成之后，停止任务
         print("全部执行完成，等待关闭线程池`````")
