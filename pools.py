@@ -312,49 +312,6 @@ def download_comment(article_id):
             time.sleep(5)
 
 
-# def spider(queue):
-#     """
-#     根据队列中的请求数据，实际爬取
-#     :param queue:
-#     :return:
-#     """
-#     while True:
-#         try:
-#             spider_info = queue.get()
-#             if spider_info:
-#                 spider_info = spider_info
-#                 dtype = spider_info['type']
-#                 data = spider_info['data']
-#                 if dtype == 'article':
-#                     download_article(data['article_id'])
-#                     print(f"{threading.get_ident()} - 文章{data['article_id']}信息入库成功...")
-#                 elif dtype == 'comment':
-#                     download_comments(data['article_id'], data['page'])
-#                     print(f"{threading.get_ident()} - 文章{data['article_id']} 第{data['page']}页信息入库成功...")
-#                 else:
-#                     print(f"{threading.get_ident()} - 不支持的类型{dtype}")
-#             else:
-#                 print(f"{threading.get_ident()} -任务结束")
-#                 break
-#         except:
-#             traceback.print_exc()
-#     # 保证每个进程都停掉
-#     queue.put(None)
-
-
-# def test():
-#     from tools.db import RedisClient
-#     from tools.utils import recursive_unicode
-#     import json
-#     client = RedisClient.get_client()
-#     all_data = client.lrange("celelry", 0, -1)
-#     print(len(all_data))
-#     for line in all_data:
-#         line = json.loads(recursive_unicode(line))
-#         if line['headers']['task'] == "celery_app.tasks.shh_task.download_article":
-#             print(line)
-
-
 def index_handler():
     """
     下载4月1号-2019年的所有文章数据
