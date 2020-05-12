@@ -205,7 +205,7 @@ def download_comment(article_id):
                         print(f"开始下载 文章{article_id} 第{real_page}页 评论")
                         while max_times:
                             try:
-                                comments = get_commtents(article_id, 1)
+                                comments = get_commtents(article_id, real_page)
                                 current_comments = comments['current_comments']
                                 for comment in current_comments:
                                     conn = get_conn()
@@ -404,13 +404,13 @@ def test_index_handler():
 
 
 if __name__ == "__main__":
-    comment_str = "我选kd 面框 低位 无球 样样顶级"
-    kws = jieba.analyse.extract_tags(comment_str, topK=10)
-    print(kws)
+    # comment_str = "我选kd 面框 低位 无球 样样顶级"
+    # kws = jieba.analyse.extract_tags(comment_str, topK=10)
+    # print(kws)
     # index_handler()
-    # article_id = 35359595
+    article_id = 35366202
     # ids = set()
-    # for i in range(1, 55):
+    # for i in range(1,5):
     #     try:
     #         comments = get_commtents(article_id, i)
     #     except:
@@ -421,3 +421,4 @@ if __name__ == "__main__":
     #         ids.add(int(z.id))
     #     print(f"第 {i} 页  共 {len(comments['current_comments'])} 条评论")
     # print(len(ids))
+    download_comment(article_id)
