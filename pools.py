@@ -347,11 +347,11 @@ def index_handler():
     :return:
     """
     executor = ThreadPoolExecutor(4)
-    min_article_id = 29629263
+    min_article_id = 29628263
     try:
         client = RedisClient.get_client()
         # for page in range(500, 3390):
-        for page in range(1, 40):
+        for page in range(1, 3450):
             print(f"spider page {page} start ...")
             # 获取虎扑cookies，下载超过10页时就必须使用cookie，防止每次修改cookie时重启服务，将cookie存入缓存
             cookies = json.loads(recursive_unicode(client.get(HUPU_DOWNLOAD_COOKIES_KEY)))
