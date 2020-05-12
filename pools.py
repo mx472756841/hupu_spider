@@ -351,7 +351,7 @@ def index_handler():
     try:
         client = RedisClient.get_client()
         # for page in range(500, 3390):
-        for page in range(393, 3400):
+        for page in range(1, 40):
             print(f"spider page {page} start ...")
             # 获取虎扑cookies，下载超过10页时就必须使用cookie，防止每次修改cookie时重启服务，将cookie存入缓存
             cookies = json.loads(recursive_unicode(client.get(HUPU_DOWNLOAD_COOKIES_KEY)))
@@ -407,8 +407,8 @@ if __name__ == "__main__":
     # comment_str = "我选kd 面框 低位 无球 样样顶级"
     # kws = jieba.analyse.extract_tags(comment_str, topK=10)
     # print(kws)
-    # index_handler()
-    article_id = 35366202
+    index_handler()
+    # article_id = 35366202
     # ids = set()
     # for i in range(1,5):
     #     try:
@@ -421,4 +421,4 @@ if __name__ == "__main__":
     #         ids.add(int(z.id))
     #     print(f"第 {i} 页  共 {len(comments['current_comments'])} 条评论")
     # print(len(ids))
-    download_comment(article_id)
+    # download_comment(article_id)
