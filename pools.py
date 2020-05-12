@@ -363,6 +363,14 @@ def index_handler():
                             break
                         else:
                             # 记录任务下载文章内容和评论内容
+                            is_pause = True
+                            while is_pause:
+                                if executor._work_queue.qsize() > 10000:
+                                    print(f"队列过长{executor._work_queue.qsize()}，暂停2分钟再执行")
+                                    time.sleep(60 * 2)
+                                else:
+                                    is_pause = False
+
                             print(f"开始下载文章{article['article_id']}")
                             executor.submit(download_article, article['article_id'])
                             print(f"开始下载文章的评论{article['article_id']}")
@@ -377,6 +385,10 @@ def index_handler():
             if page % 20 == 0:
                 print(f"暂停10分钟，等待处理，防止celery worker不足")
                 time.sleep(60 * 10)
+
+        # 全部执行完成之后，停止任务
+        print("全部执行完成，等待关闭线程池`````")
+        executor.shutdown()
     except:
         logger.exception("补充下载异常")
 
