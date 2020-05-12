@@ -17,13 +17,13 @@ def download_article(article_id):
     # 插入数据库
     conn = get_conn()
     try:
-        logger.info(f"start spider article {article_id}")
+        print(f"start spider article {article_id}")
         with conn.cursor() as cursor:
             sql = "select id from hupu_article where id = %s"
             cursor.execute(sql, article_id)
             article = cursor.fetchone()
             if article:
-                logger.warning(f"文章{article_id}已经下载完成，退出")
+                print(f"文章{article_id}已经下载完成，退出")
                 return
     finally:
         conn.close()
@@ -94,8 +94,8 @@ def download_article(article_id):
                                 """
                         cursor.execute(sql, [month_period, person])
                 conn.commit()
-            logger.info(f"end spider article {article_id}")
-            break
+            print(f"end spider article {article_id}")
+            max_times = 0
         except:
             print(f"文章{article_id}下载失败，倒数{max_times}次,等待10s再下载")
             time.sleep(10)
@@ -197,10 +197,11 @@ def download_comment(article_id):
                         print(f"{comment}入库失败跳过，处理下一个")
                     finally:
                         conn.close()
-
+                print(f"文章{article_id} 第1页 评论下载完成")
                 # 下载剩余页数
                 for real_page in range(2, total_page + 1):
                     max_times = 3
+                    print(f"开始下载 文章{article_id} 第{real_page}页 评论")
                     while max_times:
                         try:
                             comments = get_commtents(article_id, 1)
@@ -281,16 +282,17 @@ def download_comment(article_id):
                                     print(f"文章{article_id} 评论{comment}插入数据库失败")
                                 finally:
                                     conn.close()
-                            break
+                            max_times = 0
                         except:
-                            print(f"下载文章{article_id} 第{real_page}页评论失败倒数{max_times}次 暂停10s再次请求")
-                            time.sleep(10)
+                            print(f"下载文章{article_id} 第{real_page}页评论失败倒数{max_times}次 暂停5s再次请求")
+                            time.sleep(5)
                             max_times = max_times - 1
-                break
+                    print(f"文章{article_id} 第{real_page}页 评论下载完成")
+            total_times = 0
         except:
-            print(f"下载文章{article_id}评论第1页失败，等待10s在处理，倒数失败次数{total_times}")
+            print(f"下载文章{article_id}评论第1页失败，等待5s在处理，倒数失败次数{total_times}")
             total_times = total_times - 1
-            time.sleep(10)
+            time.sleep(5)
 
 
 # def spider(queue):
@@ -366,13 +368,13 @@ def index_handler():
                             print(f"开始下载文章的评论{article['article_id']}")
                             executor.submit(download_comment, article['article_id'])
                             # download_article(article['article_id'])
-                    break
+                    max_times = 0
                 except:
                     logger.error("下载失败，等待1分钟再下载")
                     max_times = max_times - 1
                     time.sleep(60)
                 print(f"spider page {page} end ...")
-            if page % 40 == 0:
+            if page % 20 == 0:
                 print(f"暂停10分钟，等待处理，防止celery worker不足")
                 time.sleep(60 * 10)
     except:
