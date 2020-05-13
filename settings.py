@@ -23,6 +23,8 @@ MYSQL_DB_DBNAME = os.environ.get("MYSQL_DB_DBNAME", "hupu")
 
 # 存储初始化，关键词对应用户ID
 SHH_KW_HASH = "shh:kw:hash"
+# 存储初始化，用户ID对应关键词
+SHH_PERSON2KWS_HASH = "shh:person2kws:hash"
 
 # 虎扑下载时的cookie信息
 HUPU_DOWNLOAD_COOKIES_KEY = "hupu:download:cookies:key"
