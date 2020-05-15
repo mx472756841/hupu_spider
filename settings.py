@@ -32,6 +32,9 @@ HUPU_DOWNLOAD_COOKIES_KEY = "hupu:download:cookies:key"
 # 记录每次下载文章的点，下载到这个点之后就结束
 LAST_DOWNLOAD_ARTICLE_ID_KEY = "last:download:article:id"
 
+# 文章评论比
+ARTICLE_TO_COMMENT = 50
+
 # 记录文章评论下载的页数
 # 第一条评论的日期 + 下载的页数，后续会根据第一条评论的日期，记录次数，7天之内，每30分钟执行一次， 7天之后，每天执行一次
 ARTICLE_DOWNLOAD_COMMENT_PAGE = "article:%s:download:comment:page:hash"

@@ -73,8 +73,10 @@ CREATE TABLE `hupu_day_list`(
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id',
   `day` varchar(10) NOT NULL COMMENT 'yyyy-mm-dd',
   `person_id` int(11) NOT NULL COMMENT '人员ID',
+  `ranking` int(5) COMMENT '排名 后续系统更新',
   `comment_cnt` int(11) DEFAULT 0 NOT NULL COMMENT '相关评论',
   `article_cnt` int(11) DEFAULT 0 NOT NULL COMMENT '相关文章',
+  `last_update_time` int(13)  COMMENT '最后更新排名时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `person_day` (`person_id`, `day`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='日榜';
@@ -83,8 +85,10 @@ CREATE TABLE `hupu_week_list`(
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id',
   `week_info` varchar(17) NOT NULL COMMENT 'yyyymmdd-yyyymmdd',
   `person_id` int(11) NOT NULL COMMENT '人员ID',
+  `ranking` int(5) COMMENT '排名 后续系统更新',
   `comment_cnt` int(11) DEFAULT 0 NOT NULL COMMENT '相关评论',
   `article_cnt` int(11) DEFAULT 0 NOT NULL COMMENT '相关文章',
+  `last_update_time` int(13)  COMMENT '最后更新排名时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `person_week` (`person_id`, `week_info`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='周榜';
@@ -93,8 +97,10 @@ CREATE TABLE `hupu_month_list`(
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id',
   `month_info` int(11) NOT NULL COMMENT 'year+0N第几月',
   `person_id` int(11) NOT NULL COMMENT '人员ID',
+  `ranking` int(5) COMMENT '排名 后续系统更新',
   `comment_cnt` int(11) DEFAULT 0 NOT NULL COMMENT '相关评论',
   `article_cnt` int(11) DEFAULT 0 NOT NULL COMMENT '相关文章',
+  `last_update_time` int(13)  COMMENT '最后更新排名时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `person_month` (`person_id`, `month_info`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='月榜';

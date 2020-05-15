@@ -1,6 +1,7 @@
 import datetime
 import json
 import re
+import time
 
 import jieba.analyse
 
@@ -88,6 +89,7 @@ def download_article(article_id, times):
 
         article = get_article(article_id)
         if article:
+            client = RedisClient.get_client()
             # 文件下载成功
             # 结巴分词解析content的关键词
             # 文本中有链接时，分词时会将部分关键词分出来，因此分词时要将文章中链接删除
@@ -103,6 +105,8 @@ def download_article(article_id, times):
                 kws = jieba.analyse.extract_tags(content, topK=10)
             else:
                 kws = jieba.analyse.extract_tags(" ".join([title, content]), topK=10)
+
+            setex_cache = []
             conn = get_conn()
             with conn.cursor() as cursor:
                 # 获取关键字对应人物
@@ -126,30 +130,64 @@ def download_article(article_id, times):
                     article.id, article.title, article.publish_date, article.author,
                     article.author_id, article.source, article.content, json.dumps(kws), json.dumps(persons)
                 ])
-
+                # 不再用 DUPLICATE KEY UPDATE 方式更新，效率太低，该用redis缓存  日期+person_id是否存在，存在就更新，不存在就新增。同时处理防止重复处理
                 for person in persons:
-                    # 插入周榜信息
-                    sql = """
-                        INSERT INTO hupu_day_list(`day`, person_id, article_cnt)
-                        VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
-                    """
-                    cursor.execute(sql, [article.publish_date[:10], person])
+                    day_user_key = "is:insert:day:%s:person:%s" % (article.publish_date[:10], person)
+                    if not client.exists(day_user_key):
+                        # 插入周榜信息
+                        sql = """
+                            INSERT INTO hupu_day_list(`day`, person_id, article_cnt)
+                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
+                        """
+                        cursor.execute(sql, [article.publish_date[:10], person])
+                        # 对于日期的，设置过期时间为36小时
+                        # client.setex(day_user_key, 36 * 3600, 1)
+                        setex_cache.append({"key": day_user_key, "time": 36 * 3600})
+                    else:
+                        sql = """
+                            UPDATE hupu_day_list set article_cnt = article_cnt + 1 where day = %s and person_id = %s
+                        """
+                        cursor.execute(sql, [article.publish_date[:10], person])
 
-                    # 插入周榜信息
-                    sql = """
-                        INSERT INTO hupu_week_list(week_info, person_id, article_cnt)
-                        VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
-                    """
-                    cursor.execute(sql, [week_period, person])
+                    week_user_key = "is:insert:week:%s:person:%s" % (week_period, person)
+                    if not client.exists(week_user_key):
+                        # 插入周榜信息
+                        sql = """
+                            INSERT INTO hupu_week_list(week_info, person_id, article_cnt)
+                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
+                        """
+                        cursor.execute(sql, [week_period, person])
+                        # 对于周的，设置过期时间为8天
+                        # client.setex(week_user_key, 8 * 24 * 3600, 1)
+                        setex_cache.append({"key": week_user_key, "time": 8 * 24 * 3600})
+                    else:
+                        sql = """
+                            UPDATE hupu_week_list set article_cnt = article_cnt + 1 where week_info = %s and person_id = %s
+                        """
+                        cursor.execute(sql, [week_period, person])
 
                     # 插入月榜信息
-                    sql = """
-                        INSERT INTO hupu_month_list(month_info, person_id, article_cnt)
-                        VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
-                    """
-                    cursor.execute(sql, [month_period, person])
+                    month_user_key = "is:insert:month:%s:person:%s" % (month_period, person)
+                    if not client.exists(month_user_key):
+                        sql = """
+                            INSERT INTO hupu_month_list(month_info, person_id, article_cnt)
+                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE article_cnt = article_cnt + 1
+                        """
+                        cursor.execute(sql, [month_period, person])
+                        # 对于周的，设置过期时间为32天
+                        # client.setex(month_user_key, 32 * 24 * 3600, 1)
+                        setex_cache.append({"key": month_user_key, "time": 32 * 24 * 3600})
+                    else:
+                        sql = """
+                            UPDATE hupu_month_list set article_cnt = article_cnt + 1 where month_info = %s and person_id = %s
+                        """
+                        cursor.execute(sql, [month_period, person])
             conn.commit()
             conn.close()
+
+            for line in setex_cache:
+                client.setex(line['key'], line['time'], 1)
+
         logger.info(f"end spider article {article_id}")
     except:
         logger.exception(f"download shh article {article_id} error, fail times {times + 1}")
@@ -201,6 +239,7 @@ def download_comment(article_id, times):
                 first_datetime = current_comments[0].publish_date
 
             for comment in current_comments:
+                setex_cache = []
                 conn = get_conn()
                 with conn.cursor() as cursor:
                     sql = "select id from hupu_comment where article_id = %s and comment_id = %s"
@@ -247,28 +286,61 @@ def download_comment(article_id, times):
                                     comment.comment, comment.reply_comment, json.dumps(kws), json.dumps(persons)])
 
                     for person in persons:
-                        # 插入日榜信息
-                        sql = """
-                            INSERT INTO hupu_day_list(`day`, person_id, comment_cnt)
-                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
-                        """
-                        cursor.execute(sql, [comment.publish_date[:10], person])
+                        day_user_key = "is:insert:day:%s:person:%s" % (comment.publish_date[:10], person)
+                        if not redis.exists(day_user_key):
+                            # 插入日榜信息
+                            sql = """
+                                INSERT INTO hupu_day_list(`day`, person_id, comment_cnt)
+                                VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                            """
+                            cursor.execute(sql, [comment.publish_date[:10], person])
+                            # 对于日期的，设置过期时间为36小时
+                            # redis.setex(day_user_key, 36 * 3600, 1)
+                            setex_cache.append({"key": day_user_key, "time": 36 * 3600})
+                        else:
+                            sql = """
+                                UPDATE hupu_day_list set comment_cnt = comment_cnt + 1 where day = %s and person_id = %s
+                            """
+                            cursor.execute(sql, [comment.publish_date[:10], person])
 
-                        # 插入周榜信息
-                        sql = """
-                            INSERT INTO hupu_week_list(week_info, person_id, comment_cnt)
-                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
-                        """
-                        cursor.execute(sql, [week_period, person])
+                        week_user_key = "is:insert:week:%s:person:%s" % (week_period, person)
 
-                        # 插入月榜信息
-                        sql = """
-                            INSERT INTO hupu_month_list(month_info, person_id, comment_cnt)
-                            VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
-                        """
-                        cursor.execute(sql, [month_period, person])
+                        if not redis.exists(week_user_key):
+                            # 插入周榜信息
+                            sql = """
+                                INSERT INTO hupu_week_list(week_info, person_id, comment_cnt)
+                                VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                            """
+                            cursor.execute(sql, [week_period, person])
+                            # 对于周的，设置过期时间为8天
+                            # redis.setex(week_user_key, 8 * 24 * 3600, 1)
+                            setex_cache.append({"key": week_user_key, "time": 8 * 24 * 3600})
+                        else:
+                            sql = """
+                                UPDATE hupu_week_list set comment_cnt = comment_cnt + 1 where week_info = %s and person_id = %s
+                            """
+                            cursor.execute(sql, [week_period, person])
+
+                        month_user_key = "is:insert:month:%s:person:%s" % (month_period, person)
+                        if not redis.exists(month_user_key):
+                            # 插入月榜信息
+                            sql = """
+                                INSERT INTO hupu_month_list(month_info, person_id, comment_cnt)
+                                VALUE(%s, %s, 1) ON DUPLICATE KEY UPDATE comment_cnt = comment_cnt + 1
+                            """
+                            cursor.execute(sql, [month_period, person])
+                            # 对于周的，设置过期时间为32天
+                            # redis.setex(month_user_key, 32 * 24 * 3600, 1)
+                            setex_cache.append({"key": month_user_key, "time": 32 * 24 * 3600})
+                        else:
+                            sql = """
+                                UPDATE hupu_month_list set comment_cnt = comment_cnt + 1 where month_info = %s and person_id = %s
+                            """
+                            cursor.execute(sql, [month_period, person])
                 conn.commit()
                 conn.close()
+                for line in setex_cache:
+                    redis.setex(line['key'], line['time'], 1)
             # 第一次爬取且没有评论，设置第一次爬取时间作为first_time用于判定下次执行时间
             cache_data = {
                 "page": page + 1 if total_page > page else page,
@@ -332,3 +404,319 @@ def download_comment(article_id, times):
             redis_client.rpush(settings.CELERY_TO_APSCHEDULER_LIST, json.dumps(task_data))
         else:
             logger.error(f"fail max times 3, article {article_id} page {page} comment fail times {times + 1} ")
+
+
+@app.task
+def real_time_update_ranking():
+    """
+    更新榜单排名，更新每日，每周，每月实时排名顺位，会有延迟，主要是用于展示折线图
+    :return:
+    """
+    is_delete_cache = False
+    client = RedisClient.get_client()
+    key = "real_time_update_ranking"
+    is_handler = client.getset(key, 1)
+    try:
+        # 防止重复处理
+        if is_handler:
+            logger.info(f"real_time_update_ranking handlering... ")
+            return
+        is_delete_cache = True
+
+        today = datetime.datetime.today().strftime("%Y-%m-%d")
+        # 查询日期数据排名
+        try:
+            conn = get_conn()
+            with conn.cursor() as cursor:
+                sql = """
+                SELECT
+                    a.id
+                FROM
+                    hupu_day_list AS a 
+                WHERE a.day = %s
+                order by a.article_cnt * %s + a.comment_cnt desc
+                """
+                cursor.execute(sql, [today, settings.ARTICLE_TO_COMMENT])
+                datas = cursor.fetchall()
+            conn.close()
+
+            if datas:
+                last_update_time = int(time.time())
+                for idx, data in enumerate(datas):
+                    max_fail_times = 3
+                    while max_fail_times:
+                        try:
+                            conn = get_conn()
+                            with conn.cursor() as cursor:
+                                sql = "update hupu_day_list set ranking = %s, last_update_time = %s where id = %s"
+                                cursor.execute(sql, [idx + 1, last_update_time, data['id']])
+                            conn.commit()
+                            max_fail_times = 0
+                        except:
+                            settings.logger.exception("更新失败，等待1s再更新")
+                            time.sleep(1)
+                            max_fail_times = max_fail_times - 1
+                        finally:
+                            conn.close()
+        except:
+            logger.exception("更新日期的失败")
+
+        # 查询按照周数据排名
+        try:
+            week_str = get_week_period(today, "%Y-%m-%d")
+            # 查询数据排名
+            conn = get_conn()
+            with conn.cursor() as cursor:
+                sql = """
+                            SELECT
+                                a.id
+                            FROM
+                                hupu_week_list AS a 
+                            WHERE a.week_info = %s
+                            order by a.article_cnt * %s + a.comment_cnt desc
+                        """
+                cursor.execute(sql, [week_str, settings.ARTICLE_TO_COMMENT])
+                datas = cursor.fetchall()
+            conn.close()
+
+            if datas:
+                last_update_time = int(time.time())
+                for idx, data in enumerate(datas):
+                    max_fail_times = 3
+                    while max_fail_times:
+                        try:
+                            conn = get_conn()
+                            with conn.cursor() as cursor:
+                                sql = "update hupu_week_list set ranking = %s, last_update_time = %s where id = %s"
+                                cursor.execute(sql, [idx + 1, last_update_time, data['id']])
+                            conn.commit()
+                            max_fail_times = 0
+                        except:
+                            settings.logger.exception("更新失败，等待1s再更新")
+                            time.sleep(1)
+                            max_fail_times = max_fail_times - 1
+                        finally:
+                            conn.close()
+        except:
+            logger.exception("更新周数据失败")
+
+        # 查询按照月数据排名
+        try:
+            month_str = get_month_period(today, "%Y-%m-%d")
+            conn = get_conn()
+            with conn.cursor() as cursor:
+                sql = """
+                    SELECT
+                        a.id
+                    FROM
+                        hupu_month_list AS a 
+                    WHERE a.month_info = %s
+                    order by a.article_cnt * %s + a.comment_cnt desc
+                """
+                cursor.execute(sql, [month_str, settings.ARTICLE_TO_COMMENT])
+                datas = cursor.fetchall()
+            conn.close()
+
+            if datas:
+                last_update_time = int(time.time())
+                for idx, data in enumerate(datas):
+                    max_fail_times = 3
+                    while max_fail_times:
+                        try:
+                            conn = get_conn()
+                            with conn.cursor() as cursor:
+                                sql = "update hupu_month_list set ranking = %s, last_update_time = %s where id = %s"
+                                cursor.execute(sql, [idx + 1, last_update_time, data['id']])
+                            conn.commit()
+                            max_fail_times = 0
+                        except:
+                            settings.logger.exception("更新失败，等待1s再更新")
+                            time.sleep(1)
+                            max_fail_times = max_fail_times - 1
+                        finally:
+                            conn.close()
+        except:
+            logger.exception("更新月数据失败")
+
+    finally:
+        if is_delete_cache:
+            client.delete(key)
+
+
+@app.task
+def update_day_finally_ranking(date_str=None):
+    """
+    更新每天球员的排名， 一般是于次日凌晨更新，如果不指定datetime就取上一天的排名
+    :param datetime:
+    :return:
+    """
+    if not date_str:
+        date_str = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+
+    is_delete_cache = False
+    client = RedisClient.get_client()
+    key = "update_day_finally_ranking:%s" % date_str
+    is_handler = client.getset(key, 1)
+    try:
+        # 防止重复处理
+        if is_handler:
+            logger.info(f"update_day_finally_ranking {date_str} handlering... ")
+            return
+        is_delete_cache = True
+
+        # 查询数据排名
+        conn = get_conn()
+        with conn.cursor() as cursor:
+            sql = """
+                SELECT
+                    a.id
+                FROM
+                    hupu_day_list AS a 
+                WHERE a.day = %s
+                order by a.article_cnt * %s + a.comment_cnt desc
+            """
+            cursor.execute(sql, [date_str, settings.ARTICLE_TO_COMMENT])
+            datas = cursor.fetchall()
+        conn.close()
+
+        if datas:
+            last_update_time = int(time.time())
+            for idx, data in enumerate(datas):
+                max_fail_times = 3
+                while max_fail_times:
+                    try:
+                        conn = get_conn()
+                        with conn.cursor() as cursor:
+                            sql = "update hupu_day_list set ranking = %s, last_update_time = %s where id = %s"
+                            cursor.execute(sql, [idx + 1, last_update_time, data['id']])
+                        conn.commit()
+                        max_fail_times = 0
+                    except:
+                        settings.logger.exception("更新失败，等待1s再更新")
+                        time.sleep(1)
+                        max_fail_times = max_fail_times - 1
+                    finally:
+                        conn.close()
+    finally:
+        if is_delete_cache:
+            client.delete(key)
+
+
+@app.task
+def update_week_finally_ranking(week_str=None):
+    """
+    更新每周球员的排名， 一般是于周一凌晨更新，如果不指定datetime就取上一天的所对应的周的信息
+    :param datetime:
+    :return:
+    """
+    if not week_str:
+        week_str = get_week_period((datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d"),
+                                   "%Y-%m-%d")
+
+    is_delete_cache = False
+    client = RedisClient.get_client()
+    key = "update_week_finally_ranking:%s" % week_str
+    is_handler = client.getset(key, 1)
+    try:
+        # 防止重复处理
+        if is_handler:
+            logger.info(f"update_week_finally_ranking {week_str} handlering... ")
+            return
+        is_delete_cache = True
+
+        # 查询数据排名
+        conn = get_conn()
+        with conn.cursor() as cursor:
+            sql = """
+                SELECT
+                    a.id
+                FROM
+                    hupu_week_list AS a 
+                WHERE a.week_info = %s
+                order by a.article_cnt * %s + a.comment_cnt desc
+            """
+            cursor.execute(sql, [week_str, settings.ARTICLE_TO_COMMENT])
+            datas = cursor.fetchall()
+        conn.close()
+
+        if datas:
+            last_update_time = int(time.time())
+            for idx, data in enumerate(datas):
+                max_fail_times = 3
+                while max_fail_times:
+                    try:
+                        conn = get_conn()
+                        with conn.cursor() as cursor:
+                            sql = "update hupu_week_list set ranking = %s, last_update_time = %s where id = %s"
+                            cursor.execute(sql, [idx + 1, last_update_time, data['id']])
+                        conn.commit()
+                        max_fail_times = 0
+                    except:
+                        settings.logger.exception("更新失败，等待1s再更新")
+                        time.sleep(1)
+                        max_fail_times = max_fail_times - 1
+                    finally:
+                        conn.close()
+    finally:
+        if is_delete_cache:
+            client.delete(key)
+
+
+@app.task
+def update_month_finally_ranking(month_str=None):
+    """
+    更新每月球员的排名， 一般是于1号凌晨更新，如果不指定datetime就取上一天的所对应的月的信息
+    :param datetime:
+    :return:
+    """
+    if not month_str:
+        month_str = get_month_period((datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d"),
+                                     "%Y-%m-%d")
+
+    is_delete_cache = False
+    client = RedisClient.get_client()
+    key = "update_month_finally_ranking:%s" % month_str
+    is_handler = client.getset(key, 1)
+    try:
+        # 防止重复处理
+        if is_handler:
+            logger.info(f"update_month_finally_ranking {month_str} handlering... ")
+            return
+        is_delete_cache = True
+
+        # 查询数据排名
+        conn = get_conn()
+        with conn.cursor() as cursor:
+            sql = """
+                SELECT
+                    a.id
+                FROM
+                    hupu_month_list AS a 
+                WHERE a.month_info = %s
+                order by a.article_cnt * %s + a.comment_cnt desc
+            """
+            cursor.execute(sql, [month_str, settings.ARTICLE_TO_COMMENT])
+            datas = cursor.fetchall()
+        conn.close()
+
+        if datas:
+            last_update_time = int(time.time())
+            for idx, data in enumerate(datas):
+                max_fail_times = 3
+                while max_fail_times:
+                    try:
+                        conn = get_conn()
+                        with conn.cursor() as cursor:
+                            sql = "update hupu_month_list set ranking = %s, last_update_time = %s where id = %s"
+                            cursor.execute(sql, [idx + 1, last_update_time, data['id']])
+                        conn.commit()
+                        max_fail_times = 0
+                    except:
+                        settings.logger.exception("更新失败，等待1s再更新")
+                        time.sleep(1)
+                        max_fail_times = max_fail_times - 1
+                    finally:
+                        conn.close()
+    finally:
+        if is_delete_cache:
+            client.delete(key)

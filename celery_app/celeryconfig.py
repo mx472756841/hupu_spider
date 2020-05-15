@@ -22,6 +22,22 @@ beat_schedule = {
         'task': 'celery_app.tasks.shh_task.index_handler',
         'schedule': crontab(minute="*/6"),
     },
+    "real_time_update_ranking": {  # 实时更新数据
+        'task': 'celery_app.tasks.shh_task.real_time_update_ranking',
+        'schedule': crontab(minute="*/10"),
+    },
+    "update_day_finally_ranking": {  # 每天 1点10分更新昨天数据
+        'task': 'celery_app.tasks.shh_task.update_day_finally_ranking',
+        'schedule': crontab(minute="10", hour="1"),
+    },
+    "update_week_finally_ranking": {  # 每周一 1点10分更新上周数据
+        'task': 'celery_app.tasks.shh_task.update_week_finally_ranking',
+        'schedule': crontab(minute="10", hour="1", day_of_week='1'),
+    },
+    "update_month_finally_ranking": {  # 每月1号 1点10分更新上月数据
+        'task': 'celery_app.tasks.shh_task.update_month_finally_ranking',
+        'schedule': crontab(minute="10", hour="1", day_of_month='1'),
+    },
 }
 
 # 更改任务的属性或者方法
