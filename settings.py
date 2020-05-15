@@ -62,5 +62,5 @@ if os.path.exists(etc_path):
         print(e)
 
 # celery相关配置,需要使用redis的相关信息,所以写在此处
-CELERY_BROKER_URL = 'redis://:{2}@{0}:{1}'.format(REDIS_HOST, REDIS_PORT, REDIS_PASS)  # 指定 Broker
-CELERY_RESULT_BACKEND = 'redis://:{2}@{0}:{1}/0'.format(REDIS_HOST, REDIS_PORT, REDIS_PASS)  # 指定 Backend
+CELERY_BROKER_URL = 'redis://:{2}@{0}:{1}/{3}'.format(REDIS_HOST, REDIS_PORT, REDIS_PASS, REDIS_DB)  # 指定 Broker
+CELERY_RESULT_BACKEND = 'redis://:{2}@{0}:{1}/{3}'.format(REDIS_HOST, REDIS_PORT, REDIS_PASS, REDIS_DB)  # 指定 Backend
