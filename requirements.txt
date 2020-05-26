@@ -8,3 +8,4 @@ redis==2.10.6
 celery==4.2.1
 kombu==4.2.1
 apscheduler==3.5.3
+pymongo

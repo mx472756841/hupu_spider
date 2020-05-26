@@ -21,6 +21,12 @@ MYSQL_DB_USER = os.environ.get("MYSQL_DB_USER", "root")
 MYSQL_DB_PASSWORD = os.environ.get("MYSQL_DB_PASSWORD", "BnakQkfF2sf1")
 MYSQL_DB_DBNAME = os.environ.get("MYSQL_DB_DBNAME", "hupu")
 
+MONGO_HOST = "115.159.119.204"
+MONGO_PORT = 27001
+MONGO_USER = "hupu"
+MONGO_PASS = "hupuMongoDB"
+MONGO_DB = "hupu"
+
 # 存储初始化，关键词对应用户ID
 SHH_KW_HASH = "shh:kw:hash"
 # 存储初始化，用户ID对应关键词

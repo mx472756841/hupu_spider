@@ -9,7 +9,7 @@ import settings
 from celery_app import app
 from hupu.community.base import get_article, get_commtents, get_article_list
 from settings import logger, ARTICLE_DOWNLOAD_COMMENT_PAGE, LAST_DOWNLOAD_ARTICLE_ID_KEY, HUPU_DOWNLOAD_COOKIES_KEY
-from tools.db import get_conn, RedisClient
+from tools.db import get_conn, RedisClient, MongoClient
 from tools.utils import get_player, get_month_period, get_week_period, recursive_unicode
 
 # 内容中有http连接及Twitter关键字时影响分词，此处做处理
@@ -107,6 +107,7 @@ def download_article(article_id, times):
                 kws = jieba.analyse.extract_tags(" ".join([title, content]), topK=10)
 
             setex_cache = []
+            mongo_db = MongoClient.get_client()
             conn = get_conn()
             with conn.cursor() as cursor:
                 # 获取关键字对应人物
@@ -130,6 +131,21 @@ def download_article(article_id, times):
                     article.id, article.title, article.publish_date, article.author,
                     article.author_id, article.source, article.content, json.dumps(kws), json.dumps(persons)
                 ])
+
+                try:
+                    mongo_db.hupu.article.insert_one({
+                        "_id": article.id,
+                        "title": article.title,
+                        "publish_date": article.publish_date,
+                        "author": article.author,
+                        "author_id": article.author_id,
+                        "content": article.content,
+                        "kws": kws,
+                        "persons": persons
+                    })
+                except:
+                    logger.exception("插入mongo失败")
+
                 # 不再用 DUPLICATE KEY UPDATE 方式更新，效率太低，该用redis缓存  日期+person_id是否存在，存在就更新，不存在就新增。同时处理防止重复处理
                 for person in persons:
                     day_user_key = "is:insert:day:%s:person:%s" % (article.publish_date[:10], person)
@@ -238,6 +254,7 @@ def download_comment(article_id, times):
             if page == 1 and current_comments:
                 first_datetime = current_comments[0].publish_date
 
+            mongo_db = MongoClient.get_client()
             for comment in current_comments:
                 setex_cache = []
                 conn = get_conn()
@@ -284,6 +301,22 @@ def download_comment(article_id, times):
                     cursor.execute(sql,
                                    [article_id, comment.id, comment.publish_date, comment.author, comment.author_id,
                                     comment.comment, comment.reply_comment, json.dumps(kws), json.dumps(persons)])
+
+                    try:
+                        mongo_db.hupu.comment.insert_one({
+                            "_id": cursor.lastrowid,
+                            "article_id": article_id,
+                            "comment_id": comment.id,
+                            "publish_date": comment.publish_date,
+                            "author": comment.author,
+                            "author_id": comment.author_id,
+                            "comment": comment.comment,
+                            "reply_comment": comment.reply_comment,
+                            "kws": kws,
+                            "persons": persons
+                        })
+                    except:
+                        logger.exception("插入mongo失败")
 
                     for person in persons:
                         day_user_key = "is:insert:day:%s:person:%s" % (comment.publish_date[:10], person)

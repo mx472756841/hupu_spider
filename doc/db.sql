@@ -104,3 +104,15 @@ CREATE TABLE `hupu_month_list`(
   PRIMARY KEY (`id`),
   UNIQUE KEY `person_month` (`person_id`, `month_info`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='月榜';
+
+CREATE TABLE `hupu_user_post_pserson_kws`(
+  `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id',
+  `openid` varchar(60) NOT NULL COMMENT '用户ID',
+  `person_id` int(11) NOT NULL COMMENT '人员ID',
+  `kw` varchar(500) NOT NULL COMMENT '关键词',
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  key `person_id` ( `person_id`),
+  key `openid` ( `openid`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='用户提交关键词';

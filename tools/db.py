@@ -1,3 +1,4 @@
+import pymongo
 import pymysql
 import redis
 from pymysql.cursors import DictCursor
@@ -46,3 +47,32 @@ def get_conn():
                                  port=settings.MYSQL_DB_PORT,
                                  cursorclass=DictCursor)
     return connection
+
+
+class MongoClient(object):
+    _client = None
+
+    def __init__(self):
+        if self._client is None:
+            self._create_mongo_client()
+
+    @classmethod
+    def _create_mongo_client(cls):
+        """
+        创建连接
+        :return:
+        """
+        MongoClient._client = pymongo.mongo_client.MongoClient(
+            host=settings.MONGO_HOST, port=settings.MONGO_PORT,
+            username=settings.MONGO_USER, password=settings.MONGO_PASS,
+            authSource=settings.MONGO_DB)
+
+    @classmethod
+    def get_client(cls):
+        if MongoClient._client is None:
+            cls._create_mongo_client()
+        return MongoClient._client
+
+if __name__ == "__main__":
+    mongodb = MongoClient.get_client()
+    print(mongodb)
