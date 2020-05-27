@@ -374,8 +374,9 @@ def download_comment(article_id, times):
                             cursor.execute(sql, [month_period, person])
 
                         # v1.2.0 添加到缓存，用于后续用户投票处理
-                        key = f"{person}-{local_comment_id}"
-                        redis.sadd(settings.ALL_COMMENT_DIRECTION_SET, key)
+                        if person in settings.PERSONS_ID:
+                            key = f"{person}-{local_comment_id}"
+                            redis.sadd(settings.ALL_COMMENT_DIRECTION_SET, key)
 
                 conn.commit()
                 conn.close()

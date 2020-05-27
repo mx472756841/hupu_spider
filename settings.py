@@ -45,6 +45,9 @@ ALL_COMMENT_DIRECTION_SET = "all:comment:direction:set"
 USER_VOTE_DATA_HASH = "user:%s:vote:data:hash"
 USER_VOTE_DATA_SET = "user:%s:vote:data:set"
 
+# 前期可投票的用户
+PERSONS_ID = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23]
+
 # 文章评论比
 ARTICLE_TO_COMMENT = 50
 
