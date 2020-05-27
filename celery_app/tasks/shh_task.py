@@ -302,9 +302,11 @@ def download_comment(article_id, times):
                                    [article_id, comment.id, comment.publish_date, comment.author, comment.author_id,
                                     comment.comment, comment.reply_comment, json.dumps(kws), json.dumps(persons)])
 
+                    local_comment_id = cursor.lastrowid
+
                     try:
                         mongo_db.hupu.comment.insert_one({
-                            "_id": cursor.lastrowid,
+                            "_id": local_comment_id,
                             "article_id": article_id,
                             "comment_id": comment.id,
                             "publish_date": comment.publish_date,
@@ -370,6 +372,11 @@ def download_comment(article_id, times):
                                 UPDATE hupu_month_list set comment_cnt = comment_cnt + 1 where month_info = %s and person_id = %s
                             """
                             cursor.execute(sql, [month_period, person])
+
+                        # v1.2.0 添加到缓存，用于后续用户投票处理
+                        key = f"{person}-{local_comment_id}"
+                        redis.sadd(settings.ALL_COMMENT_DIRECTION_SET, key)
+
                 conn.commit()
                 conn.close()
                 for line in setex_cache:

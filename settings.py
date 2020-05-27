@@ -38,6 +38,13 @@ HUPU_DOWNLOAD_COOKIES_KEY = "hupu:download:cookies:key"
 # 记录每次下载文章的点，下载到这个点之后就结束
 LAST_DOWNLOAD_ARTICLE_ID_KEY = "last:download:article:id"
 
+# 记录每条评论相关人员信息，用户收集内容的倾向性使用
+ALL_COMMENT_DIRECTION_SET = "all:comment:direction:set"
+
+# 记录每个用户的投票数据
+USER_VOTE_DATA_HASH = "user:%s:vote:data:hash"
+USER_VOTE_DATA_SET = "user:%s:vote:data:set"
+
 # 文章评论比
 ARTICLE_TO_COMMENT = 50
 
