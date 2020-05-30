@@ -1,11 +1,16 @@
+import json
 import re
 from http.cookiejar import CookieJar
 
 from pyquery.pyquery import PyQuery as pquery
 
+from hupu.exceptions import CookieException, BaseException
 from hupu.structures import *
+from hupu.structures.author import Author
 from hupu.utils.fetch import fetch
-from settings import logger
+from settings import logger, HUPU_DOWNLOAD_COOKIES_KEY
+from tools.db import RedisClient
+from tools.utils import recursive_unicode
 
 PAGE_COUNT = re.compile("pageCount:(?P<page_count>\d+)", re.S)
 
@@ -158,6 +163,49 @@ def get_article_list(plate, page, cookies=None):
         raise RuntimeError(f"get plate {plate} {page} error!!!")
 
 
+def get_user_detail(user_id, cookies):
+    """
+    获取用户明细信息 需要登录
+    :param user_id:
+    :return:
+    """
+    real_fetch_url = user_profile_url % user_id
+    # 添加cookies的几种方式
+    # 1. 直接放在headers中，cookie键对应的值就是浏览器复制的值
+    # 2. 在request时，增加key cookies，对应的是一个字典或者CookieJar类型的对象，从数据库取出需要的即可
+    result = fetch(real_fetch_url, cookies=cookies)
+    if result:
+        root = pquery(result)
+        title = root.find("head title").text()
+        if title == "嗯，出错了...":
+            raise CookieException()
+        elif not title.endswith("的档案"):
+            raise BaseException(error_info="非正常的用户ID")
+        profile = root("table.profile_table").eq(0)
+        profile_list = profile.find('tr').items()
+        profile_info = {
+            "author_id": user_id,
+            "author_name": root("#headtop > h1").text().strip("的档案"),
+        }
+        for p in profile_list:
+            key, v = p('td').eq(0).text().strip()[:-1], p('td').eq(1).text()
+            if key == "所在地":
+                if v != "null":
+                    profile_info['place'] = v.strip()
+            if key == '性别':
+                profile_info['gener'] = v.strip()
+            if key == '论坛等级':
+                profile_info['level'] = int(v.strip())
+            if key == '注册时间':
+                profile_info['register_date'] = v.strip()
+        return Author(**profile_info)
+    elif result is None:
+        # 用户不存在
+        return None
+    else:
+        raise RuntimeError(f"get user_detail {user_id} error!!!")
+
+
 if __name__ == "__main__":
     # article = get_article(34576735)
     # print(article.content)
@@ -174,6 +222,15 @@ if __name__ == "__main__":
     # get_commtents("34563541", 1)
     # print(get_commtents("34593801", 1))
 
-    url = "https://bbs.hupu.com/33600265.html"
-    result = fetch(url)
-    print(result)
+    # url = "https://bbs.hupu.com/33600265.html"
+    # result = fetch(url)
+    # print(result)
+
+    client = RedisClient.get_client()
+    cookies = json.loads(recursive_unicode(client.get(HUPU_DOWNLOAD_COOKIES_KEY)))
+    # print(cookies)
+    # get_user_detail(35512074689389, cookies)  # 保密
+    # get_user_detail(238467143452731, cookies)  # 男 所在地是没有
+    data = get_user_detail(30193012086352, cookies)  # 女 所在地是上海市浦东新区
+    # print(get_user_detail(280923583165420, cookies))  # 保密 所在地是上海市
+    data = get_user_detail(205226121481456, cookies)  # 所在地是null

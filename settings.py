@@ -41,6 +41,9 @@ LAST_DOWNLOAD_ARTICLE_ID_KEY = "last:download:article:id"
 # 记录每条评论相关人员信息，用户收集内容的倾向性使用
 ALL_COMMENT_DIRECTION_SET = "all:comment:direction:set"
 
+# 当日是否下载过用户信息
+IS_DOWNLOAD_AUTHOR_PROFILE = "%s:is:download:author:%s:profile"
+
 # 记录每个用户的投票数据
 USER_VOTE_DATA_HASH = "user:%s:vote:data:hash"
 USER_VOTE_DATA_SET = "user:%s:vote:data:set"

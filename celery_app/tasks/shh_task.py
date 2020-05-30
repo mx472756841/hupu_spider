@@ -4,13 +4,17 @@ import re
 import time
 
 import jieba.analyse
+import urllib3
 
 import settings
 from celery_app import app
-from hupu.community.base import get_article, get_commtents, get_article_list
+from hupu.community.base import get_article, get_commtents, get_article_list, get_user_detail
+from hupu.exceptions import CookieException, BaseException
 from settings import logger, ARTICLE_DOWNLOAD_COMMENT_PAGE, LAST_DOWNLOAD_ARTICLE_ID_KEY, HUPU_DOWNLOAD_COOKIES_KEY
 from tools.db import get_conn, RedisClient, MongoClient
 from tools.utils import get_player, get_month_period, get_week_period, recursive_unicode
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 内容中有http连接及Twitter关键字时影响分词，此处做处理
 P_CONTENT = [re.compile("[a-zA-z]+://[^\s]*"), re.compile("twitter", re.I)]
@@ -200,7 +204,8 @@ def download_article(article_id, times):
                         cursor.execute(sql, [month_period, person])
             conn.commit()
             conn.close()
-
+            # 下载作者信息
+            download_author_profile.apply_async(args=[article.author_id, 1])
             for line in setex_cache:
                 client.setex(line['key'], line['time'], 1)
 
@@ -219,7 +224,6 @@ def download_article(article_id, times):
                     "%Y-%m-%d %H:%M:%S")
             }
             redis_client.rpush(settings.CELERY_TO_APSCHEDULER_LIST, json.dumps(task_data))
-
         else:
             logger.error(f"fail max times 3, article {article_id} fail times {times + 1} ")
 
@@ -377,9 +381,12 @@ def download_comment(article_id, times):
                         if person in settings.PERSONS_ID:
                             key = f"{person}-{local_comment_id}"
                             redis.sadd(settings.ALL_COMMENT_DIRECTION_SET, key)
-
                 conn.commit()
                 conn.close()
+
+                # 下载作者信息
+                download_author_profile.apply_async(args=[comment.author_id, 1])
+
                 for line in setex_cache:
                     redis.setex(line['key'], line['time'], 1)
             # 第一次爬取且没有评论，设置第一次爬取时间作为first_time用于判定下次执行时间
@@ -445,6 +452,74 @@ def download_comment(article_id, times):
             redis_client.rpush(settings.CELERY_TO_APSCHEDULER_LIST, json.dumps(task_data))
         else:
             logger.error(f"fail max times 3, article {article_id} page {page} comment fail times {times + 1} ")
+
+
+@app.task
+def download_author_profile(author_id, times):
+    """
+    下载用户信息
+    当日下载过用户信息后，今日不再下载
+    :param author_id:
+    :param times:
+    :return:
+    """
+    try:
+        redis = RedisClient.get_client()
+        is_download_key = settings.IS_DOWNLOAD_AUTHOR_PROFILE % (datetime.datetime.now().strftime("%Y%m%d"), author_id)
+        if redis.exists(is_download_key):
+            logger.warning(f"用户{author_id}今日信息已下载，本次退出")
+            return
+
+        cookies = json.loads(recursive_unicode(redis.get(HUPU_DOWNLOAD_COOKIES_KEY)))
+        if not cookies:
+            # todo
+            logger.error("需要先下载cookie信息")
+        author_profile = get_user_detail(author_id, cookies or {})
+        if author_profile:
+            # 将下载内容放入mongodb
+            mongo_db = MongoClient.get_client()
+            mongo_db.hupu.author.update_one(
+                {
+                    "_id": author_id
+                }, {
+                    "$set":
+                        {
+                            "_id": author_id,
+                            "author_name": author_profile.author_name,
+                            "gener": author_profile.gener,
+                            "level": author_profile.level,
+                            "province": author_profile.province,
+                            "city": author_profile.city,
+                            "register_date": author_profile.register_date,
+                        },
+                },
+                upsert=True
+            )
+            # 过期时间 次日3点
+            now = datetime.datetime.now()
+            del_datetime = datetime.datetime.strptime(
+                "{} 03:00:00".format((now + datetime.timedelta(days=1)).strftime("%Y-%m-%d")), "%Y-%m-%d %H:%M:%S")
+            redis.setex(is_download_key, del_datetime - now, 1)
+    except CookieException as e:
+        # todo 重新下载cookie信息
+        logger.error("需要重新下载cookie信息")
+    except BaseException as e:
+        logger.error(f"下载失败:{e.error_info}")
+    except:
+        logger.exception(f"download hupu author {author_id}  error, fail times {times + 1}")
+        if times < 3:
+            # 最多不超过3次, 三分钟之后再次执行
+            redis_client = RedisClient.get_client()
+            task_data = {
+                "func_name": "download_author_profile",
+                "args": [author_id, times + 1],
+                "task_id": f"download_author_profile_{author_id}",
+                "execute_datetime": (datetime.datetime.now() + datetime.timedelta(minutes=3)).strftime(
+                    "%Y-%m-%d %H:%M:%S")
+            }
+            redis_client.rpush(settings.CELERY_TO_APSCHEDULER_LIST, json.dumps(task_data))
+        else:
+            logger.error(f"fail max times 3,  hupu author {author_id} fail times {times + 1} ")
 
 
 @app.task
@@ -761,3 +836,19 @@ def update_month_finally_ranking(month_str=None):
     finally:
         if is_delete_cache:
             client.delete(key)
+
+
+if __name__ == "__main__":
+    download_author_profile(158592523874574, 1)  # 所在地是澳洲
+    # download_author_profile(20301818386678, 1)  # 所在地是陕西省榆林市
+    # download_author_profile(51768945318600, 1)  # 所在地是湖南省长沙市
+    # download_author_profile(233475226037282, 1)  # 所在地是广东省 广州市
+    # download_author_profile(204148885683605, 1)  # 所在地是浙江省台州市
+    # download_author_profile(165934265824606, 1)  # 所在地是上海市浦东新区
+    # download_author_profile(236419949250105, 1)  # 所在地是山东省 青岛市
+    # download_author_profile(82935735042486, 1)  # 所在地是北京市海淀区
+    # download_author_profile(280923583165420, 1)  # 保密 所在地是上海市
+    # download_author_profile(205226121481456, 1)  # 所在地是null
+    # download_author_profile(35512074689389, 1)  # 保密
+    # download_author_profile(238467143452731, 1)  # 男 所在地是没有
+    # download_author_profile(30193012086352, 1)  # 女 所在地是上海市浦东新区

@@ -1,6 +1,7 @@
 # urls
 real_bbs_url = "https://bbs.hupu.com"
 plate_url = 'https://bbs.hupu.com/%s-postdate-%s'
+user_profile_url = 'https://my.hupu.com/%s/profile'
 
 # http
 fetch_timeout = 15

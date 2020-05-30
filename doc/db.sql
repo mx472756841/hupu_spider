@@ -116,3 +116,15 @@ CREATE TABLE `hupu_user_post_pserson_kws`(
   key `person_id` ( `person_id`),
   key `openid` ( `openid`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='用户提交关键词';
+
+
+CREATE TABLE `hupu_author_info` (
+  `author_id` varchar(25) NOT NULL COMMENT '用户ID',
+  `author_name` varchar(200) NOT NULL COMMENT '用户昵称',
+  `level` int(4) COMMENT '等级',
+  `place1` varchar(20) COMMENT '一级地方',
+  `place2` varchar(20) COMMENT '二级地方',
+  `register_date` DATETIME COMMENT '注册时间',
+  `gener` tinyint(1) COMMENT '性别 0:女 1:男 2:未知'
+  PRIMARY KEY (`author_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

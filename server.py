@@ -17,6 +17,8 @@ def delay_run_spider_task(func_name, args):
         shh_task.download_article.apply_async(args=args)
     elif func_name == "download_comment":
         shh_task.download_comment.apply_async(args=args)
+    elif func_name == "download_author_profile":
+        shh_task.download_author_profile.apply_async(args=args)
     else:
         settings.logger.error(f"暂时不支持的爬虫任务{func_name} args = {args}")
 
