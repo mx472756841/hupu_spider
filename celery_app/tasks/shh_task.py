@@ -467,9 +467,9 @@ def download_author_profile(author_id, times):
     try:
         redis = RedisClient.get_client()
         is_download_key = settings.IS_DOWNLOAD_AUTHOR_PROFILE % (datetime.datetime.now().strftime("%Y%m%d"), author_id)
-        # if redis.exists(is_download_key):
-        #     logger.warning(f"用户{author_id}今日信息已下载，本次退出")
-        #     return
+        if redis.exists(is_download_key):
+            logger.warning(f"用户{author_id}今日信息已下载，本次退出")
+            return
 
         cookies = json.loads(recursive_unicode(redis.get(HUPU_DOWNLOAD_COOKIES_KEY)))
         if not cookies:
@@ -1065,7 +1065,7 @@ def update_every_day_shh_report():
                 from hupu_comment
                 where id > %s order by id asc 
             """
-            execute_data = [last_article_id]
+            execute_data = [last_comment_id]
         else:
             # 查询今日的文章id。按照id倒序排序
             sql = """
