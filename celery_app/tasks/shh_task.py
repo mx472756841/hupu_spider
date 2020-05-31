@@ -467,9 +467,9 @@ def download_author_profile(author_id, times):
     try:
         redis = RedisClient.get_client()
         is_download_key = settings.IS_DOWNLOAD_AUTHOR_PROFILE % (datetime.datetime.now().strftime("%Y%m%d"), author_id)
-        if redis.exists(is_download_key):
-            logger.warning(f"用户{author_id}今日信息已下载，本次退出")
-            return
+        # if redis.exists(is_download_key):
+        #     logger.warning(f"用户{author_id}今日信息已下载，本次退出")
+        #     return
 
         cookies = json.loads(recursive_unicode(redis.get(HUPU_DOWNLOAD_COOKIES_KEY)))
         if not cookies:
@@ -1215,9 +1215,11 @@ if __name__ == "__main__":
     # download_author_profile(35512074689389, 1)  # 保密
     # download_author_profile(238467143452731, 1)  # 男 所在地是没有
     # download_author_profile(30193012086352, 1)  # 女 所在地是上海市浦东新区
-    # update_every_day_shh_report()
-    mongo_db = MongoClient.get_client()
-    datas = mongo_db.hupu.author.find({})
-    with open("author.csv", "a") as f:
-        for author in datas:
-            f.write(f"{author.get('province')}\n")
+    update_every_day_shh_report()
+    # mongo_db = MongoClient.get_client()
+    # datas = mongo_db.hupu.author.find({})
+    # with open("author.csv", "a") as f:
+    #     for author in datas:
+    #         f.write(f"{author.get('province')}\n")
+    # for author in datas:
+    #     download_author_profile(author['_id'], 1)

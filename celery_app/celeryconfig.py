@@ -38,6 +38,10 @@ beat_schedule = {
         'task': 'celery_app.tasks.shh_task.update_month_finally_ranking',
         'schedule': crontab(minute="10", hour="1", day_of_month='1'),
     },
+    "update_every_day_shh_report": {  # 每10分钟更新一次数据
+        'task': 'celery_app.tasks.shh_task.update_every_day_shh_report',
+        'schedule': crontab(minute="*/10"),
+    },
 }
 
 # 更改任务的属性或者方法
