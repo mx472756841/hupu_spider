@@ -54,6 +54,14 @@ PERSONS_ID = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
 # 文章评论比
 ARTICLE_TO_COMMENT = 50
 
+# 处理当日用户是否被纳入统计报告
+BEEN_HANDLER_AUTHOR_SET = "date:%s:handler:author:set"
+TMP_BEEN_HANDLER_AUTHOR_SET = "date:%s:handler:author:set:tmp"
+
+# 处理用户信息，停止时的用户ID【可能异步还没有采集到的】
+STOP_ARTICLE_REPORT_AUTHOR = "stop:article:report:author:hash"
+STOP_COMMENT_REPORT_AUTHOR = "stop:comment:report:author:hash"
+
 # 记录文章评论下载的页数
 # 第一条评论的日期 + 下载的页数，后续会根据第一条评论的日期，记录次数，7天之内，每30分钟执行一次， 7天之后，每天执行一次
 ARTICLE_DOWNLOAD_COMMENT_PAGE = "article:%s:download:comment:page:hash"

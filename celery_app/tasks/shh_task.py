@@ -1,3 +1,4 @@
+import copy
 import datetime
 import json
 import re
@@ -838,8 +839,370 @@ def update_month_finally_ranking(month_str=None):
             client.delete(key)
 
 
+@app.task
+def update_every_day_shh_report():
+    """
+    更新每天湿乎乎用户报告
+    1. 根据文章和评论的最后一次更新， 查询之后的，按照日期归档存储
+    2. 将更新数据放到mongodb
+    3. 数据结构为
+    {
+        "_id":"20200503",
+        "total_article": 100,
+        "total_comment": 100,
+        "total_user_cnt": 100,
+        "sex": {  固定三项
+            "男": 40,
+            "女":10,
+            "保密": 50
+        },
+        "regtion": { 多项
+            "山东省": 100,
+            "北京市": 100,
+            "上海市":100
+        },
+        "days":{ # 固定五项
+            "0-10天": 10,
+            "10-30天": 10,
+            "半年以内": 10,
+            "1年以内": 10,
+            "1年以上": 10,
+        },
+        "level": { # 固定7项
+            "0-5级": 10,
+            "5-10级": 10,
+            "10-30级": 10,
+            "30-60级": 10,
+            "60-90级": 10,
+            "90-120级": 10,
+            "120级以上": 10
+        }
+    }
+    :return:
+    """
+    is_delete_cache = False
+    client = RedisClient.get_client()
+    key = "update_every_day_shh_report:cache"
+    is_handler = client.getset(key, 1)
+    try:
+        # 防止重复处理
+        if is_handler:
+            logger.info(f"update_every_day_shh_report handlering... ")
+            return
+        is_delete_cache = True
+        mongo_db = MongoClient.get_client()
+        # 查询缓存key，当前已经处理到的key，如果没有则从当日开始
+        hanlder_cache = "update_every_day_shh_report:hash:key"
+        data = recursive_unicode(client.hgetall(hanlder_cache))
+        last_article_id = data.get('article_id')
+        last_comment_id = data.get('comment_id')
+        # 初始化结构数据
+        init_data = {
+            "total_article": 0,
+            "total_comment": 0,
+            "total_user_cnt": 0,
+            "gener.男": 0,
+            "gener.女": 0,
+            "gener.保密": 0,
+            "days.0-30天": 0,
+            "days.30-180天": 0,
+            "days.1年以内": 0,
+            "days.1-3年": 0,
+            "days.3-5年": 0,
+            "days.5-10年": 0,
+            "days.10年以上": 0,
+            "level.0-5": 0,
+            "level.5-10": 0,
+            "level.10-30": 0,
+            "level.30-60": 0,
+            "level.60-90": 0,
+            "level.90以上": 0
+        }
+        if last_article_id:
+            # 查询大于最后一次处理的文章ID
+            sql = """
+                select author_id, publish_date, id
+                from hupu_article 
+                where id > %s order by id asc 
+            """
+            execute_data = [last_article_id]
+        else:
+            # 查询今日的文章id。按照id倒序排序
+            sql = """
+                select author_id, publish_date, id
+                from hupu_article 
+                where publish_date > %s order by id asc 
+            """
+            execute_data = [datetime.datetime.now().strftime("%Y-%m-%d 00:00:00")]
+        # 处理文章
+        try:
+            conn = get_conn()
+            with conn.cursor() as cursor:
+                cursor.execute(sql, execute_data)
+                all_article_data = cursor.fetchall()
+            conn.close()
+            logger.info(f"本次共有{len(all_article_data)}篇文章的作者信息待处理")
+            # 最后处理的文章ID
+            this_last_article_id = ""
+            # 日期为key 后续为可直接更新的数据
+            update_article_data = {}
+            for article_info in all_article_data:
+                date = article_info['publish_date'].strftime("%Y-%m-%d")
+                update_data = update_article_data.get(date, copy.deepcopy(init_data))
+                # 查询指定用户的信息，如果用户已经处理过的则不处理，只增加total_article
+                is_handler = settings.BEEN_HANDLER_AUTHOR_SET % date
+                is_temp_handler = settings.TMP_BEEN_HANDLER_AUTHOR_SET % date
+                if client.sismember(is_handler, article_info['author_id']) or \
+                        client.sismember(is_temp_handler, article_info['author_id']):
+                    # 用户已经统计，或者已经在临时中，则只增加文章数
+                    update_data['total_article'] += 1
+                else:
+                    # 查询用户类型 年龄，地域，级数，地域
+                    author_info = recursive_unicode(mongo_db.hupu.author.find_one({"_id": article_info['author_id']}))
+                    if not author_info:
+                        if (datetime.datetime.now() - article_info['publish_date']).seconds > 20 * 60:
+                            # 超过20分钟，还没有用户的信息，说明用户数是0级，虎扑还没有数据，直接跳过
+                            author_info = {}
+                        else:
+                            last_stop = recursive_unicode(
+                                client.hget(settings.STOP_ARTICLE_REPORT_AUTHOR, article_info['author_id']))
+                            if last_stop:
+                                if int(last_stop) == 2:
+                                    logger.error(f"已经连续三次停止在用户{article_info['author_id']}，跳过此用户，请注意查看!!!!")
+                                    # 删除缓存
+                                    client.delete(settings.STOP_ARTICLE_REPORT_AUTHOR)
+                                    author_info = {}
+                                else:
+                                    client.hincrby(settings.STOP_ARTICLE_REPORT_AUTHOR, article_info['author_id'])
+                                    break
+                            else:
+                                client.delete(settings.STOP_ARTICLE_REPORT_AUTHOR)
+                                client.hincrby(settings.STOP_ARTICLE_REPORT_AUTHOR, article_info['author_id'])
+                                break
+
+                    # 计算报告数据
+                    gener = author_info.get('gener')
+                    level = author_info.get('level', 0)
+                    province = author_info.get("province")
+                    register_date = author_info.get("register_date")
+                    if gener and gener in ("保密", "男", "女"):
+                        update_data[f'gener.{gener}'] += 1
+                    if level:
+                        if level <= 5:
+                            update_data['level.0-5'] += 1
+                        elif level <= 10:
+                            update_data['level.5-10'] += 1
+                        elif level <= 30:
+                            update_data['level.10-30'] += 1
+                        elif level <= 60:
+                            update_data['level.30-60'] += 1
+                        elif level <= 90:
+                            update_data['level.60-90'] += 1
+                        else:
+                            update_data['level.90以上'] += 1
+                    if province:
+                        province_cnt = update_data.get(f'regtion.{province}', 0)
+                        province_cnt += 1
+                        update_data[f'regtion.{province}'] = province_cnt
+                    if register_date:
+                        try:
+                            register_datetime = datetime.datetime.strptime(register_date, "%Y-%m-%d")
+                            register_day = (article_info['publish_date'] - register_datetime).days
+                            if register_day <= 30:
+                                update_data['days.0-30天'] += 1
+                            elif register_day <= 180:
+                                update_data['days.30-180天'] += 1
+                            elif register_day <= 365:
+                                update_data['days.1年以内'] += 1
+                            elif register_day <= 1095:
+                                update_data['days.1-3年'] += 1
+                            elif register_day <= 1826:
+                                update_data['days.3-5年'] += 1
+                            elif register_day <= 3652:
+                                update_data['days.5-10年'] += 1
+                            else:
+                                update_data['days.10年以上'] += 1
+                        except:
+                            logger.exception("处理日期出错")
+                    update_data['total_user_cnt'] += 1
+                    # 将指定用户添加到临时key，防止多次计入 实际更新完之后，再将所有缓存数据删除
+                    client.sadd(is_temp_handler, article_info['author_id'])
+                    update_data['total_article'] += 1
+                update_article_data[date] = update_data
+                # 记录最后一次的文章id以及卡在的用户id
+                this_last_article_id = article_info['id']
+
+            # 有最后处理的文章ID，表示有数据处理
+            if update_article_data:
+                for k, value in update_article_data.items():
+                    mongo_db.hupu.shh_report.update_one(
+                        {
+                            "_id": k
+                        }, {
+                            "$inc": value,
+                        },
+                        upsert=True
+                    )
+                    is_handler = settings.BEEN_HANDLER_AUTHOR_SET % k
+                    is_temp_handler = settings.TMP_BEEN_HANDLER_AUTHOR_SET % k
+                    # 添加到缓存的已经处理过的日期的用户KEY
+                    authors = client.smembers(is_temp_handler)
+                    if authors:
+                        authors = recursive_unicode(list(authors))
+                        client.sadd(is_handler, *authors)
+                        # 删除添加到缓存的临时 日期
+                        client.delete(is_temp_handler)
+                # 更新最后处理的文章ID
+                client.hset(hanlder_cache, 'article_id', this_last_article_id)
+        except:
+            logger.exception("处理文章失败，下次启动时，继续处理")
+
+        # 处理评论
+        if last_comment_id:
+            # 查询大于最后一次处理的文章ID
+            sql = """
+                select author_id, publish_date, id
+                from hupu_comment
+                where id > %s order by id asc 
+            """
+            execute_data = [last_article_id]
+        else:
+            # 查询今日的文章id。按照id倒序排序
+            sql = """
+                select author_id, publish_date, id
+                from hupu_comment 
+                where publish_date > %s order by id asc 
+            """
+            execute_data = [datetime.datetime.now().strftime("%Y-%m-%d 00:00:00")]
+        try:
+
+            conn = get_conn()
+            with conn.cursor() as cursor:
+                cursor.execute(sql, execute_data)
+                all_comment_data = cursor.fetchall()
+            conn.close()
+            logger.info(f"本次共有{len(all_comment_data)}篇评论的作者信息待处理")
+            # 最后处理的评论ID
+            this_last_comment_id = ""
+            # 日期为key 后续为可直接更新的数据
+            update_comment_data = {}
+            for comment_info in all_comment_data:
+                date = comment_info['publish_date'].strftime("%Y-%m-%d")
+                update_data = update_comment_data.get(date, copy.deepcopy(init_data))
+                # 查询指定用户的信息，如果用户已经处理过的则不处理，只增加total_article
+                is_handler = settings.BEEN_HANDLER_AUTHOR_SET % date
+                is_temp_handler = settings.TMP_BEEN_HANDLER_AUTHOR_SET % date
+                if client.sismember(is_handler, comment_info['author_id']) or \
+                        client.sismember(is_temp_handler, comment_info['author_id']):
+                    # 用户已经统计，或者已经在临时中，则只增加文章数
+                    update_data['total_comment'] += 1
+                else:
+                    # 查询用户类型 年龄，地域，级数，地域
+                    author_info = recursive_unicode(mongo_db.hupu.author.find_one({"_id": comment_info['author_id']}))
+                    if not author_info:
+                        if (datetime.datetime.now() - comment_info['publish_date']).seconds > 20 * 60:
+                            # 超过20分钟，还没有用户的信息，说明用户数是0级，虎扑还没有数据，直接跳过
+                            author_info = {}
+                        else:
+                            last_stop = recursive_unicode(
+                                client.hget(settings.STOP_ARTICLE_REPORT_AUTHOR, comment_info['author_id']))
+                            if last_stop:
+                                if int(last_stop) == 2:
+                                    logger.error(f"已经连续三次停止在用户{comment_info['author_id']}，跳过此用户，请注意查看!!!!")
+                                    # 删除缓存
+                                    client.delete(settings.STOP_ARTICLE_REPORT_AUTHOR)
+                                    author_info = {}
+                                else:
+                                    client.hincrby(settings.STOP_ARTICLE_REPORT_AUTHOR, comment_info['author_id'])
+                                    break
+                            else:
+                                client.delete(settings.STOP_ARTICLE_REPORT_AUTHOR)
+                                client.hincrby(settings.STOP_ARTICLE_REPORT_AUTHOR, comment_info['author_id'])
+                                break
+
+                    # 计算报告数据
+                    gener = author_info.get('gener')
+                    level = author_info.get('level')
+                    province = author_info.get("province")
+                    register_date = author_info.get("register_date")
+                    if gener and gener in ("保密", "男", "女"):
+                        update_data[f'gener.{gener}'] += 1
+                    if level:
+                        if level <= 5:
+                            update_data['level.0-5'] += 1
+                        elif level <= 10:
+                            update_data['level.5-10'] += 1
+                        elif level <= 30:
+                            update_data['level.10-30'] += 1
+                        elif level <= 60:
+                            update_data['level.30-60'] += 1
+                        elif level <= 90:
+                            update_data['level.60-90'] += 1
+                        else:
+                            update_data['level.90以上'] += 1
+                    if province:
+                        province_cnt = update_data.get(f'regtion.{province}', 0)
+                        province_cnt += 1
+                        update_data[f'regtion.{province}'] = province_cnt
+                    if register_date:
+                        try:
+                            register_datetime = datetime.datetime.strptime(register_date, "%Y-%m-%d")
+                            register_day = (comment_info['publish_date'] - register_datetime).days
+                            if register_day <= 30:
+                                update_data['days.0-30天'] += 1
+                            elif register_day <= 180:
+                                update_data['days.30-180天'] += 1
+                            elif register_day <= 365:
+                                update_data['days.1年以内'] += 1
+                            elif register_day <= 1095:
+                                update_data['days.1-3年'] += 1
+                            elif register_day <= 1826:
+                                update_data['days.3-5年'] += 1
+                            elif register_day <= 3652:
+                                update_data['days.5-10年'] += 1
+                            else:
+                                update_data['days.10年以上'] += 1
+                        except:
+                            logger.exception("处理日期出错")
+                    # 将指定用户添加到临时key，防止多次计入 实际更新完之后，再将所有缓存数据删除
+                    update_data['total_user_cnt'] += 1
+                    client.sadd(is_temp_handler, comment_info['author_id'])
+                    update_data['total_comment'] += 1
+                update_comment_data[date] = update_data
+                # 记录最后一次的文章id以及卡在的用户id
+                this_last_comment_id = comment_info['id']
+
+            # 有最后处理的文章ID，表示有数据处理
+            if update_comment_data:
+                for k, value in update_comment_data.items():
+                    mongo_db.hupu.shh_report.update_one(
+                        {
+                            "_id": k
+                        }, {
+                            "$inc": value,
+                        },
+                        upsert=True
+                    )
+                    is_handler = settings.BEEN_HANDLER_AUTHOR_SET % k
+                    is_temp_handler = settings.TMP_BEEN_HANDLER_AUTHOR_SET % k
+                    # 添加到缓存的已经处理过的日期的用户KEY
+                    authors = client.smembers(is_temp_handler)
+                    if authors:
+                        authors = recursive_unicode(list(authors))
+                        client.sadd(is_handler, *authors)
+                        # 删除添加到缓存的临时 日期
+                        client.delete(is_temp_handler)
+                # 更新最后处理的文章ID
+                client.hset(hanlder_cache, 'comment_id', this_last_comment_id)
+        except:
+            logger.exception("处理评论失败，下次启动时，继续处理")
+    finally:
+        if is_delete_cache:
+            client.delete(key)
+
+
 if __name__ == "__main__":
-    download_author_profile(158592523874574, 1)  # 所在地是澳洲
+    # download_author_profile(158592523874574, 1)  # 所在地是澳洲
     # download_author_profile(20301818386678, 1)  # 所在地是陕西省榆林市
     # download_author_profile(51768945318600, 1)  # 所在地是湖南省长沙市
     # download_author_profile(233475226037282, 1)  # 所在地是广东省 广州市
@@ -852,3 +1215,9 @@ if __name__ == "__main__":
     # download_author_profile(35512074689389, 1)  # 保密
     # download_author_profile(238467143452731, 1)  # 男 所在地是没有
     # download_author_profile(30193012086352, 1)  # 女 所在地是上海市浦东新区
+    # update_every_day_shh_report()
+    mongo_db = MongoClient.get_client()
+    datas = mongo_db.hupu.author.find({})
+    with open("author.csv", "a") as f:
+        for author in datas:
+            f.write(f"{author.get('province')}\n")

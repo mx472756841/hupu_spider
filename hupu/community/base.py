@@ -231,6 +231,26 @@ if __name__ == "__main__":
     # print(cookies)
     # get_user_detail(35512074689389, cookies)  # 保密
     # get_user_detail(238467143452731, cookies)  # 男 所在地是没有
-    data = get_user_detail(30193012086352, cookies)  # 女 所在地是上海市浦东新区
+    # data = get_user_detail(30193012086352, cookies)  # 女 所在地是上海市浦东新区
     # print(get_user_detail(280923583165420, cookies))  # 保密 所在地是上海市
-    data = get_user_detail(205226121481456, cookies)  # 所在地是null
+    # data = get_user_detail(205226121481456, cookies)  # 所在地是null
+    author = get_user_detail(95453713761116, cookies)
+    print(author.province)
+    print(author.city)
+    print("================")
+    author = get_user_detail(50447429476835, cookies)
+    print(author.province)
+    print(author.city)
+    print("================")
+    author = get_user_detail(188534634833820, cookies)
+    print(author.province)
+    print(author.city)
+    print("================")
+    author = get_user_detail(168510920646089, cookies)
+    print(author.province)
+    print(author.city)
+    print("================")
+    author = get_user_detail(60154180816327, cookies)
+    print(author.province)
+    print(author.city)
+    print("================")
